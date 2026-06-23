@@ -1,0 +1,8 @@
+ .planning/STATE.md                  |  26 ++--
+ config/tts_user_config.json         |   6 +
+ daemon/content_router.py            |  43 ++++++
+ daemon/tts_daemon.py                |  13 ++
+ hooks/pre-tool-use.sh               |  15 ++
+ tests/test_announce01_truncation.sh |  53 +++++++
+ tests/test_cutover_discipline.py    | 293 ++++++++++++++++++++++++++++++++++++
+ 7 files changed, 437 insertions(+), 12 deletions(-)

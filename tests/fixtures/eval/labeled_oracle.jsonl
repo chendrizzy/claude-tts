@@ -1,0 +1,62 @@
+{"text": "0", "label": "skip", "class": "gibberish"}
+{"text": "1", "label": "skip", "class": "gibberish"}
+{"text": "10", "label": "skip", "class": "gibberish"}
+{"text": "46", "label": "skip", "class": "gibberish"}
+{"text": "827", "label": "skip", "class": "gibberish"}
+{"text": "31569481", "label": "skip", "class": "gibberish"}
+{"text": "8f790dda64465fd8bb0a7a3c3e62eb02a2826cd4", "label": "skip", "class": "gibberish"}
+{"text": "846a683: no deletions 55c258a: no deletions 9135b1e: no deletions", "label": "skip", "class": "gibberish"}
+{"text": "agent-ab6777ccd75eca25b agent-ac0005e4d5fe35e99 agent-ad3ffdc2e5d0a7b9a", "label": "skip", "class": "gibberish"}
+{"text": "-rw-r--r--   1 user  wheel  1196 May  4 15:23 ErrorBanner.tsx", "label": "skip", "class": "gibberish"}
+{"text": "-rw-r--r--@  1 user  staff   5841 Jun 12 13:15 failure_taxonomy.py", "label": "skip", "class": "gibberish"}
+{"text": "-rw-r--r--   1 user  wheel    147 May  4 15:04 Procfile -rw-r--r--   1 ju…", "label": "skip", "class": "gibberish"}
+{"text": "drwxr-xr-x  10 user  wheel   320 May  4 14:53 .. -rw-r--r--@  1 user…", "label": "skip", "class": "gibberish"}
+{"text": "user       94610   0.0  0.0 442192560   1536 s010  S     3:47AM   0:00.00…", "label": "skip", "class": "gibberish"}
+{"text": "user       80972   0.0  0.0 441888048    640   ??  SN    3:35AM   0:00.29…", "label": "skip", "class": "gibberish"}
+{"text": "=== Daemons running === user       39608  13.8  0.1 442454016  48976 s010…", "label": "skip", "class": "gibberish"}
+{"text": "-r-xr--r--@  1 root  wheel    235648 May 11 12:09 com.panic.NovaPrivilegedHelper", "label": "skip", "class": "gibberish"}
+{"text": "End: 1777953326 Min: 40 minutes 2026-05-05T03:55:26Z", "label": "skip", "class": "gibberish"}
+{"text": "Start: 2026-05-05T04:37:05Z / 1777955825", "label": "skip", "class": "gibberish"}
+{"text": "PLAN_START_TIME=2026-05-04T22:06:50Z PLAN_START_EPOCH=1777932410", "label": "skip", "class": "gibberish"}
+{"text": "1579 /Volumes/DISK/GitHub/music/example/.claude/worktrees/agent-a77f8abb95b15…", "label": "skip", "class": "gibberish"}
+{"text": "23 passed, 4 failed.", "label": "speak", "class": "legit"}
+{"text": "16 passed.", "label": "speak", "class": "legit"}
+{"text": "7 passed.", "label": "speak", "class": "legit"}
+{"text": "5 passed.", "label": "speak", "class": "legit"}
+{"text": "11 passed.", "label": "speak", "class": "legit"}
+{"text": "1 failed, 6 passed.", "label": "speak", "class": "legit"}
+{"text": "5 failed.", "label": "speak", "class": "legit"}
+{"text": "6a85473 test(01-02): add failing tests for license_check + model_license_scan (…", "label": "speak", "class": "legit"}
+{"text": "1d78dc3 test(01-02): add failing test for verify_ffmpeg_lgpl (RED)", "label": "speak", "class": "legit"}
+{"text": "warning: Failed to clone files; falling back to full copy. This may lead to deg…", "label": "speak", "class": "legit"}
+{"text": "5 error.", "label": "speak", "class": "legit"}
+{"text": "6 error.", "label": "speak", "class": "legit"}
+{"text": "7 error.", "label": "speak", "class": "legit"}
+{"text": "0 errors.", "label": "speak", "class": "legit"}
+{"text": "846a683 feat(01-01): scaffold backend FastAPI skeleton + uv-pinned deps 980c55e…", "label": "speak", "class": "legit"}
+{"text": "ac0fa8b chore(01-01): scaffold repo root (Makefile, Procfile, env, README) f3ab…", "label": "speak", "class": "legit"}
+{"text": "980c55e feat(01-01): add shared/ Pydantic FX chain schema (CR-M3 editable insta…", "label": "speak", "class": "legit"}
+{"text": "/docs/oauth2-redirect /redoc /healthz", "label": "speak", "class": "legit"}
+{"text": "schema_version: 0.1.0 / chain_name: tape_lofi Both imports OK without PYTHONPATH", "label": "speak", "class": "legit"}
+{"text": "Duration: 7m (476s)", "label": "speak", "class": "legit"}
+{"text": "2 files changed, 62 insertions(+) create mode 100644 infra/Dockerfile create mo…", "label": "speak", "class": "legit"}
+{"text": "INFO:     Application shutdown complete. INFO:     Finished server process [453…", "label": "speak", "class": "legit"}
+{"text": "[main 85d0017] Wave 2.5 fix: stop orphaning the daemon socket on slow-response…", "label": "speak", "class": "legit"}
+{"text": "Wave 2 dispatched. Plan 01-03 (Slice A) executor is running in worktree isolati…", "label": "speak", "class": "legit"}
+{"text": "uv 0.8.9 (68c0bf8a2 2025-08-11) -rw-r--r--  1 user  wheel  1252 May  4 15…", "label": "speak", "class": "legit"}
+{"text": "ffprobe version 8.1.1 Copyright (c) 2007-2026 the FFmpeg developers built with…", "label": "speak", "class": "legit"}
+{"text": "=== Test 2: clean stack should exit 0 === OK: 1 packages, all licenses on allow…", "label": "speak", "class": "legit"}
+{"text": "=== Check if backend venv exists in main tree === --- uv sync exit: 0", "label": "speak", "class": "legit"}
+{"text": "Both imports OK without PYTHONPATH", "label": "speak", "class": "recall_miss"}
+{"text": "Application shutdown complete", "label": "speak", "class": "recall_miss"}
+{"text": "OK: 1 packages, all licenses on allowlist", "label": "speak", "class": "recall_miss"}
+{"text": "[checkpoint] phase 1 wave 1/4 plan 01-01 complete (1/5 plans done)", "label": "speak", "class": "recall_miss"}
+{"text": "[worktree-agent-a91a55a192f7384ec 1d78dc3] test(01-02): add failing test...", "label": "speak", "class": "recall_miss"}
+{"text": "[main 85d0017] Wave 2.5 fix: stop orphaning the daemon socket", "label": "speak", "class": "recall_miss"}
+{"text": "total 176 drwxr-xr-x@ 17 user  wheel    544 May  4 21:29 . drwxr-xr-x@ 23…", "label": "skip", "class": "precision_miss"}
+{"text": "M apps/api/uv.lock ?? .planning/milestones/ ?? .planning/seeds/SEED-002-communi…", "label": "skip", "class": "precision_miss"}
+{"text": "user       43965   0.0  0.1 442375712  49328   ??  S     2:53PM   0:00.33…", "label": "skip", "class": "precision_miss"}
+{"text": "srw-rw-rw-@ 1 user  wheel  0 May  4 13:31 /tmp/tts_daemon.sock --- user…", "label": "skip", "class": "precision_miss"}
+{"text": "A  frontend/hooks/useTransform.ts M  frontend/lib/api/transform.ts ?? .claude/", "label": "skip", "class": "precision_miss"}
+{"text": "/docs/oauth2-redirect /redoc /healthz", "label": "skip", "class": "precision_miss"}
+{"text": "licenses-allowlist.txt model-licenses-allowlist.txt === Note: backend/scripts/_…", "label": "skip", "class": "precision_miss"}

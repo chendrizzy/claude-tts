@@ -1,0 +1,46 @@
+[project]
+name = "claude-tts"
+version = "0.1.0"
+description = "A filtered, spoken stream of a Claude Code agent's output — judge + summarize via a local LLM, synthesize via a TTS engine, driven by Claude Code hooks."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "chendrizzy" }]
+keywords = ["claude-code", "tts", "text-to-speech", "ollama", "kokoro", "voice"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+
+# Hard runtime dependencies of the daemon interpreter. The judge/summarize
+# providers talk to Ollama / OpenAI-compatible servers over HTTP (requests),
+# so no vendor SDK is required.
+dependencies = [
+    "psutil>=5.9",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Cross-platform Azure voices, no local ML deps (the lowest-friction engine).
+edge = ["edge-tts>=6.1"]
+# Test/dev tooling. Async tests need pytest-asyncio; the binding `make verify`
+# gate is all-sync and needs neither.
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+# NOTE: the `kokoro` engine runs daemon/kokoro_worker.py under a SEPARATE
+# interpreter that has mlx-audio + numpy installed (Apple-Silicon wheels),
+# pointed at by $MLX_PYTHON — it is intentionally not a dependency of this
+# project's interpreter. See README "Engines".
+
+[project.urls]
+Homepage = "https://github.com/chendrizzy/claude-tts"
+Repository = "https://github.com/chendrizzy/claude-tts"
+
+[tool.uv]
+# This is an application (a daemon run by Claude Code hooks), not a distributable
+# library, so uv manages the environment without building/installing a package.
+package = false
+# Supply-chain hardening: wait before resolving freshly published versions, so a
+# compromised release can't be pulled the moment it lands.
+exclude-newer = "7 days"

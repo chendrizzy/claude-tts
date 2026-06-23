@@ -1,0 +1,88 @@
+{
+  "_comment": "Example claude-tts config. Copy to your config location and edit. The daemon embeds safe defaults, so any omitted block still works.",
+  "voice": {
+    "engine": "edge-tts",
+    "_engine_options": ["edge-tts", "kokoro", "voicebox", "say", "espeak"],
+    "_engine_note": "edge-tts = Azure network voices, no local ML deps (lowest-friction default; needs the 'edge' extra). kokoro = local MLX Kokoro-82M (offline, Apple-Silicon; needs a separate mlx-audio interpreter via MLX_PYTHON). voicebox = local Voicebox app via REST.",
+    "name": "en-US-AvaNeural",
+    "_kokoro_voices": ["af_heart", "af_bella", "am_michael", "bf_emma", "bm_george"],
+    "mlx_python": null,
+    "_mlx_python_desc": "Only for engine=kokoro: path to an interpreter with mlx-audio installed. null = resolved at runtime (env MLX_PYTHON, else python3 on PATH).",
+    "kokoro_model": "mlx-community/Kokoro-82M-bf16",
+    "rate": 1.0,
+    "volume": 1.0,
+    "_volume_desc": "afplay -v gain: 1.0 unmodified, <1.0 quieter, >1.0 amplifies."
+  },
+  "voicebox": {
+    "_comment": "Only used when voice.engine == 'voicebox'. Local Voicebox REST API (token-free, no MCP).",
+    "url": "http://127.0.0.1:17493",
+    "profile_id": null,
+    "_profile_id_desc": "Voicebox profile id for spoken reports; null = engine default voice.",
+    "engine": "kokoro",
+    "personality": false,
+    "_personality_desc": "true applies the profile's persona LLM rewrite (LOSSY — it can drop/alter facts). Keep false for faithful status/error readouts; reserve true for flavor.",
+    "cleanup": true,
+    "timeout_s": 10.0
+  },
+  "filtering": {
+    "enabled": true,
+    "filter_code_blocks": true,
+    "filter_tool_output": true,
+    "filter_technical_output": true,
+    "max_response_length": 6500,
+    "_description": "Responses longer than this are summarized or skipped."
+  },
+  "llm_provider": {
+    "_comment": "The judge + summarize brain. type=ollama (local, default), openai (OpenAI-compatible base_url+model+api_key), or null (no-LLM deterministic floor).",
+    "type": "ollama"
+  },
+  "summarizer": {
+    "_comment": "Ollama summarization budget + model warmth.",
+    "model": "qwen2.5-coder:1.5b",
+    "_model_desc": "Recommended local model. Any Ollama model works; setup-time calibration checks it. For an OpenAI-compatible backend set llm_provider.type=openai instead.",
+    "inner_timeout_s": 3.5,
+    "_inner_timeout_s_desc": "Hard cap on a single summarize call; with max_tokens ~120 a summary lands ~1.5s.",
+    "keep_alive": "30m",
+    "warm_interval_s": 120
+  },
+  "routing": {
+    "_comment": "ContentRouter timeouts. Wrapper timeouts are clamped in code to ALWAYS exceed summarizer.inner_timeout_s, so a mis-set value can never re-introduce raw-markdown readout.",
+    "summarize_timeout_s": 4.0,
+    "binary_judge_timeout_s": 2.5
+  },
+  "audio": {
+    "global_lock": true,
+    "_description": "Prevents audio overlap across multiple Claude sessions.",
+    "playback_device": "default",
+    "normalize_volume": true,
+    "fade_in_ms": 50,
+    "fade_out_ms": 100
+  },
+  "performance": {
+    "cache_enabled": true,
+    "cache_ttl_seconds": 3600,
+    "max_concurrent_requests": 3,
+    "timeout_seconds": 30,
+    "retry_attempts": 2
+  },
+  "logging": {
+    "level": "INFO",
+    "_levels": ["DEBUG", "INFO", "WARNING", "ERROR"],
+    "log_to_file": true,
+    "max_log_size_mb": 50,
+    "keep_logs_days": 7
+  },
+  "advanced": {
+    "_comment": "Advanced settings - change only if you know what you're doing.",
+    "socket_path": "/tmp/tts_daemon.sock",
+    "max_queue_size": 50,
+    "health_check_interval_seconds": 60,
+    "circuit_breaker_enabled": true,
+    "circuit_breaker_threshold": 5,
+    "resource_monitoring": true
+  },
+  "feature_flags": {
+    "_comment": "Runtime toggles — re-read per request, no restart needed.",
+    "legacy_speak_enabled": true
+  }
+}

@@ -1,0 +1,105 @@
+On branch main
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	deleted:    DISTRIBUTION_README.md
+	deleted:    GITHUB_SETUP.md
+	deleted:    PACKAGE_CONTENTS.md
+	modified:   config/README.md
+	modified:   daemon/enhanced_hook_integration.py
+	deleted:    docs/JARVIS_VOICE_ASSISTANT_GUIDE.md
+	deleted:    docs/TTS_README.md
+	deleted:    docs/TTS_STARTUP_GUIDE.md
+	deleted:    docs/VOICE_GUIDE.md
+	deleted:    test-install-dry-run.sh
+	deleted:    tts-launcher-integration.sh
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.claude/
+	.serena/
+	AGENTS.md
+	CLAUDE.md
+	QUICK_REFERENCE.md
+	QUICK_START.md
+	config/ai_assistants.json
+	daemon/.last_greeting_time
+	daemon/.last_suffix_time
+	daemon/ai_assistant_adapter.py
+	daemon/audio_reactive_orb.py
+	daemon/interrupt_handler.py
+	daemon/ollama_integration.py
+	daemon/pipeline/__init__.py
+	daemon/simple_wake_word.py
+	daemon/timeout_manager.py
+	daemon/visual_indicator.py
+	daemon/visual_menubar.py
+	daemon/visual_notifications.py
+	daemon/visual_orb.py
+	daemon/visual_overlay.py
+	daemon/voice_assistant_manager.py
+	daemon/voice_input.py
+	daemon/wake_word_detector.py
+	daemon/whisper_fallback_recognizer.py
+	daemon/whisper_primary_recognizer.py
+	docs/CUSTOM_WAKE_WORDS.md
+	docs/DESIGN_VARIATIONS.md
+	docs/INDEX.md
+	docs/SIRI_LIKE_VISUAL_FEEDBACK.md
+	docs/VISUAL_FEEDBACK_QUICKSTART.md
+	docs/VISUAL_INDICATOR_DESIGN_REVIEW.md
+	docs/VOICE_ASSISTANT_SETUP.md
+	docs/VOICE_FEEDBACK_MONITORING.md
+	docs/deployment/
+	docs/guides/
+	docs/reports/
+	install_multi_ai.sh
+	openspec/
+	porcupine_key.txt
+	scripts/cli_interceptor.py
+	scripts/codex-tts
+	scripts/gemini-tts
+	scripts/gemini_tts_wrapper.py
+	scripts/openai_tts_wrapper.py
+	scripts/tts-launcher-integration.sh
+	scripts/verify_live_daemon_contractions.py
+	start_voice_assistant.sh
+	tests/fixtures/router_corpus/
+	tests/test_anti_expansion_regression.py
+	tests/test_apostrophe_preservation.py
+	tests/test_audio_reactive_orb.py
+	tests/test_contraction_e2e.py
+	tests/test_contraction_fix.py
+	tests/test_contraction_preservation.py
+	tests/test_contraction_pronunciation.py
+	tests/test_contraction_restoration.py
+	tests/test_contraction_tts_playback.py
+	tests/test_daemon_contraction_trace.py
+	tests/test_daemon_contractions.sh
+	tests/test_daemon_integration.py
+	tests/test_daemon_sass.sh
+	tests/test_edge_tts_apostrophe.py
+	tests/test_full_pipeline.py
+	tests/test_integration_contractions.py
+	tests/test_interrupt_handler.py
+	tests/test_interrupt_only.py
+	tests/test_live_capture.py
+	tests/test_live_contractions.py
+	tests/test_multi_ai.py
+	tests/test_ollama_contractions.py
+	tests/test_pipeline_modules.py
+	tests/test_pipeline_trace.py
+	tests/test_playback_control.py
+	tests/test_regression.py
+	tests/test_speak_contractions.py
+	tests/test_speaking_rate.py
+	tests/test_ssml_sass.py
+	tests/test_ssml_simplified.py
+	tests/test_status_file.py
+	tests/test_timeout_manager.py
+	tests/test_visual_feedback.py
+	tests/test_voice_assistant_integration.py
+	tests/test_voice_ux_integration.py
+	voice_status.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")

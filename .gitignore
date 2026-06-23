@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual envs / uv
+.venv/
+venv/
+.uv/
+uv.lock
+
+# Runtime artifacts
+*.sock
+*.pid
+logs/
+*.log
+
+# Local environment / secrets (keep .env.example tracked)
+.env
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS cruft
+.DS_Store

@@ -1,0 +1,30 @@
+198:def _looks_like_path_list(content: str) -> bool:
+222:def _hash_content(text: str) -> str:
+228:def _now() -> float:
+232:def _last_n_lines(text: str, n: int = 3) -> str:
+240:def _truncate(text: str, max_chars: int = 80) -> str:
+258:    def __init__(
+302:    def set_queue_manager(self, qm: "QueueManager") -> None:
+309:    def set_turn_buffer_callback(self, cb: FlushCallback) -> None:
+322:    def turn_buffer_for(self, session_id: str) -> "TurnBuffer":
+349:    async def classify_event(self, event: dict) -> RouterDecision:
+370:    async def route(self, event: dict) -> Optional[RoutedItem]:
+429:    async def _classify_inner(self, event: dict) -> RouterDecision:
+444:    def _classify_stop(self, event: dict) -> RouterDecision:
+489:    async def _classify_tool(self, event: dict) -> RouterDecision:
+517:        def _is_error_false_positive(text: str) -> bool:
+623:    def _extract_tool_signal(
+653:    def _extract_bash(self, stdout: str, command: str = "") -> tuple[str, str]:
+693:    def _verbosity_for(content: str, target_hint: str) -> str:
+728:    def _maybe_prefix_target(content: str, target_hint: str) -> str:
+747:    def _bash_target_hint(command: str) -> str:
+807:    def _extract_grep(self, event: dict, stdout: str) -> tuple[str, str]:
+840:    def _extract_task(self, stdout: str) -> tuple[str, str]:
+852:    def _extract_webfetch(self, stdout: str) -> tuple[str, str]:
+864:    def _extract_error_snippet(self, stdout: str) -> str:
+877:    def _drop_check(self, content: str) -> Optional[str]:
+914:    def _note_hash(self, content: str) -> None:
+921:    async def _binary_llm_judge(self, stdout: str, tool_name: str) -> bool:
+956:    async def _maybe_summarize(self, decision: RouterDecision) -> RouterDecision:
+984:    def _pressure_for(self, event: dict) -> float:
+998:    def _make_decision(

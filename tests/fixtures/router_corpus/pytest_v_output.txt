@@ -1,0 +1,50 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- /Users/user/.pyenv/versions/3.13.5/bin/python3
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: /home/user/project
+plugins: logfire-4.3.6, anyio-4.11.0, asyncio-1.1.0, Faker-37.6.0, cov-6.2.1, libtmux-0.46.2, hypothesis-6.138.14
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 91 items
+
+tests/test_content_router.py::test_classify_corpus[err_bash_stderr_long] PASSED [  1%]
+tests/test_content_router.py::test_classify_corpus[err_bash_stdout_keyword_failed] PASSED [  2%]
+tests/test_content_router.py::test_classify_corpus[err_interrupted_true] PASSED [  3%]
+tests/test_content_router.py::test_classify_corpus[err_python_traceback] PASSED [  4%]
+tests/test_content_router.py::test_classify_corpus[err_cargo_panic] PASSED [  5%]
+tests/test_content_router.py::test_classify_corpus[err_npm_denied_keyword] PASSED [  6%]
+tests/test_content_router.py::test_classify_corpus[err_short_stderr_below_threshold_but_keyword] PASSED [  7%]
+tests/test_content_router.py::test_classify_corpus[err_stderr_short_below_threshold_silence] PASSED [  8%]
+tests/test_content_router.py::test_classify_corpus[final_short_answer] PASSED [  9%]
+tests/test_content_router.py::test_classify_corpus[final_long_needs_summary] PASSED [ 10%]
+tests/test_content_router.py::test_classify_corpus[final_one_sentence] PASSED [ 12%]
+tests/test_content_router.py::test_classify_corpus[final_with_number] PASSED [ 13%]
+tests/test_content_router.py::test_classify_corpus[final_question_back_to_user] PASSED [ 14%]
+tests/test_content_router.py::test_classify_corpus[final_empty_silence] PASSED [ 15%]
+tests/test_content_router.py::test_classify_corpus[insight_star_marker] PASSED [ 16%]
+tests/test_content_router.py::test_classify_corpus[insight_i_found] PASSED [ 17%]
+tests/test_content_router.py::test_classify_corpus[insight_root_cause] PASSED [ 18%]
+tests/test_content_router.py::test_classify_corpus[insight_turns_out_inline] PASSED [ 19%]
+tests/test_content_router.py::test_classify_corpus[insight_this_means] PASSED [ 20%]
+tests/test_content_router.py::test_classify_corpus[insight_long_needs_summary] PASSED [ 21%]
+tests/test_content_router.py::test_classify_corpus[status_pytest_pass_fail] PASSED [ 23%]
+tests/test_content_router.py::test_classify_corpus[status_pytest_all_pass] PASSED [ 24%]
+tests/test_content_router.py::test_classify_corpus[status_grep_with_matches] PASSED [ 25%]
+tests/test_content_router.py::test_classify_corpus[status_build_compiled] PASSED [ 26%]
+tests/test_content_router.py::test_classify_corpus[status_task_subagent] PASSED [ 27%]
+tests/test_content_router.py::test_classify_corpus[status_webfetch_title] PASSED [ 28%]
+tests/test_content_router.py::test_classify_corpus[noise_read_success] PASSED [ 29%]
+tests/test_content_router.py::test_classify_corpus[noise_edit_success] PASSED [ 30%]
+tests/test_content_router.py::test_classify_corpus[noise_assistant_boilerplate] PASSED [ 31%]
+tests/test_content_router.py::test_classify_corpus[noise_code_block_only] PASSED [ 32%]
+tests/test_content_router.py::test_classify_corpus[noise_pre_tool_phase] PASSED [ 34%]
+tests/test_content_router.py::test_classify_corpus[noise_unknown_command] PASSED [ 35%]
+tests/test_content_router.py::test_route_short_returns_routed_item_no_summary PASSED [ 36%]
+tests/test_content_router.py::test_route_long_calls_summarizer PASSED    [ 37%]
+tests/test_content_router.py::test_route_silence_returns_none PASSED     [ 38%]
+tests/test_content_router.py::test_classify_never_raises[none] PASSED    [ 39%]
+tests/test_content_router.py::test_classify_never_raises[string] PASSED  [ 40%]
+tests/test_content_router.py::test_classify_never_raises[int] PASSED     [ 41%]
+tests/test_content_router.py::test_classify_never_raises[list] PASSED    [ 42%]
+tests/test_content_router.py::test_classify_never_raises[empty_dict] PASSED [ 43%]
+tests/test_content_router.py::test_classify_never_raises[tool_event_no_response] PASSED [ 45%]
