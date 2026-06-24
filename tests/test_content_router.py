@@ -27,6 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from daemon.content_router import ContentRouter  # noqa: E402
 from daemon.tts_types import Category, RoutedItem  # noqa: E402
+from daemon.providers.ollama_provider import OllamaProvider  # noqa: E402
 
 
 CORPUS_PATH = PROJECT_ROOT / "tests" / "fixtures" / "event_corpus.jsonl"
@@ -82,7 +83,7 @@ def test_classify_corpus(case: dict) -> None:
     event = case["event"]
 
     summarizer = MockOllamaSummarizer()
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
 
     decision = asyncio.run(router.classify_event(event))
 
@@ -143,7 +144,7 @@ def _long_final_answer_event() -> dict:
 
 def test_route_short_returns_routed_item_no_summary() -> None:
     summarizer = MockOllamaSummarizer()
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
 
     item = asyncio.run(router.route(_short_final_answer_event()))
 
@@ -160,7 +161,7 @@ def test_route_short_returns_routed_item_no_summary() -> None:
 
 def test_route_long_calls_summarizer() -> None:
     summarizer = MockOllamaSummarizer(response="Refactored cache; halved evictions.")
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
 
     item = asyncio.run(router.route(_long_final_answer_event()))
 
@@ -176,7 +177,7 @@ def test_route_long_calls_summarizer() -> None:
 
 def test_route_silence_returns_none() -> None:
     summarizer = MockOllamaSummarizer()
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
 
     silent_event = {
         "command": "tool_event",
@@ -222,7 +223,7 @@ def test_route_silence_returns_none() -> None:
     ],
 )
 def test_classify_never_raises(garbage) -> None:
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(garbage))
     assert decision.should_speak is False
     # raw_excerpt should hold a diagnostic.
@@ -234,7 +235,7 @@ def test_classify_never_raises(garbage) -> None:
 # ---------------------------------------------------------------------------
 
 def test_dedupe_drops_repeated_content() -> None:
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     ev = _short_final_answer_event()
 
     first = asyncio.run(router.classify_event(ev))
@@ -275,7 +276,7 @@ def test_dedupe_drops_repeated_content() -> None:
          "boilerplate_with_body"],
 )
 def test_stop_drop_filter(content: str, expect_speak: bool) -> None:
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     ev = {
         "command": "stop_event",
         "session_id": "x",
@@ -299,7 +300,7 @@ class _StubQM:
 
 
 def test_set_queue_manager_late_bind() -> None:
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     assert router.queue_manager is None
     router.set_queue_manager(_StubQM())
     assert router.queue_manager is not None
@@ -411,7 +412,7 @@ def _make_speak_summarizer() -> MockOllamaSummarizer:
 
 def test_pressure_green_unchanged_baseline() -> None:
     """pressure=1.0 (GREEN) — behavior unchanged from baseline."""
-    router = ContentRouter(config={}, ollama_summarizer=_make_speak_summarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(_make_speak_summarizer()))
     router.set_queue_manager(_PressureQM(1.0))
 
     # Low-pri Bash (LOW=3) — speaks at GREEN
@@ -420,14 +421,14 @@ def test_pressure_green_unchanged_baseline() -> None:
     assert item_low.decision.priority == 3  # PRIORITY_LOW
 
     # Normal-pri test result (NORMAL=5) — speaks at GREEN
-    router2 = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router2 = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router2.set_queue_manager(_PressureQM(1.0))
     item_norm = asyncio.run(router2.route(_bash_test_event()))
     assert item_norm is not None
     assert item_norm.decision.category == Category.STATUS
 
     # Final answer (HIGH=7) — speaks at GREEN
-    router3 = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router3 = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router3.set_queue_manager(_PressureQM(1.0))
     item_fa = asyncio.run(router3.route(_stop_final_answer_event()))
     assert item_fa is not None
@@ -437,21 +438,21 @@ def test_pressure_green_unchanged_baseline() -> None:
 def test_pressure_red_silences_borderline_content() -> None:
     """pressure=2.5 (RED) — borderline (PRIORITY_LOW) silenced, NORMAL/HIGH pass."""
     # PRIORITY_LOW (3) — silenced under RED (cutoff = 5)
-    router_low = ContentRouter(config={}, ollama_summarizer=_make_speak_summarizer())
+    router_low = ContentRouter(config={}, provider=OllamaProvider(_make_speak_summarizer()))
     router_low.set_queue_manager(_PressureQM(2.5))
     assert asyncio.run(router_low.route(_bash_lowpri_event())) is None, (
         "RED pressure must silence PRIORITY_LOW (borderline) content"
     )
 
     # PRIORITY_NORMAL (5) — survives RED (5 >= 5)
-    router_norm = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router_norm = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router_norm.set_queue_manager(_PressureQM(2.5))
     item_norm = asyncio.run(router_norm.route(_bash_test_event()))
     assert item_norm is not None, "RED must not silence NORMAL-priority STATUS"
     assert item_norm.decision.category == Category.STATUS
 
     # PRIORITY_HIGH (7) — survives RED
-    router_hi = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router_hi = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router_hi.set_queue_manager(_PressureQM(2.5))
     item_fa = asyncio.run(router_hi.route(_stop_final_answer_event()))
     assert item_fa is not None
@@ -461,26 +462,26 @@ def test_pressure_red_silences_borderline_content() -> None:
 def test_pressure_black_only_errors_speak() -> None:
     """pressure=5.0 (BLACK) — only ERROR-class items speak."""
     # PRIORITY_LOW (3) — silenced
-    router_low = ContentRouter(config={}, ollama_summarizer=_make_speak_summarizer())
+    router_low = ContentRouter(config={}, provider=OllamaProvider(_make_speak_summarizer()))
     router_low.set_queue_manager(_PressureQM(5.0))
     assert asyncio.run(router_low.route(_bash_lowpri_event())) is None
 
     # PRIORITY_NORMAL (5) — silenced (5 < 10)
-    router_norm = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router_norm = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router_norm.set_queue_manager(_PressureQM(5.0))
     assert asyncio.run(router_norm.route(_bash_test_event())) is None, (
         "BLACK must silence STATUS items"
     )
 
     # PRIORITY_HIGH (7) — silenced (7 < 10)
-    router_hi = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router_hi = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router_hi.set_queue_manager(_PressureQM(5.0))
     assert asyncio.run(router_hi.route(_stop_final_answer_event())) is None, (
         "BLACK must silence even FINAL_ANSWER (only ERROR speaks)"
     )
 
     # PRIORITY_ERROR (10) — passes
-    router_err = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router_err = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     router_err.set_queue_manager(_PressureQM(5.0))
     item_err = asyncio.run(router_err.route(_bash_error_event()))
     assert item_err is not None, "BLACK must NEVER silence ERROR"
@@ -490,7 +491,7 @@ def test_pressure_black_only_errors_speak() -> None:
 def test_pressure_error_always_passes_regardless() -> None:
     """ERROR always passes regardless of pressure (every tier)."""
     for pressure in (1.0, 1.5, 2.5, 5.0, 100.0):
-        router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+        router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
         router.set_queue_manager(_PressureQM(pressure))
         item = asyncio.run(router.route(_bash_error_event()))
         assert item is not None, (
@@ -501,7 +502,7 @@ def test_pressure_error_always_passes_regardless() -> None:
 
 def test_pressure_no_qm_bound_treats_as_green() -> None:
     """Without a QueueManager bound, pressure defaults to 1.0 (GREEN behavior)."""
-    router = ContentRouter(config={}, ollama_summarizer=_make_speak_summarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(_make_speak_summarizer()))
     # No queue_manager set
     assert router.queue_manager is None
     item = asyncio.run(router.route(_bash_lowpri_event()))
@@ -559,7 +560,7 @@ def _bash_event(stdout: str, stderr: str = "") -> dict:
 ])
 def test_status_false_positive_filelistings_silenced(stdout: str, reason: str) -> None:
     """File listings and path-list dumps must not be spoken as STATUS."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(_bash_event(stdout)))
     assert decision.should_speak is False, (
         f"shadow false positive ({reason}) leaked through: {decision.content!r}"
@@ -584,7 +585,7 @@ def test_status_false_positive_filelistings_silenced(stdout: str, reason: str) -
 ])
 def test_error_false_positive_warnings_silenced(stderr: str, reason: str) -> None:
     """Warning/deprecated lines must not be classified as ERROR."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(_bash_event("", stderr=stderr)))
     assert decision.category != Category.ERROR, (
         f"shadow false positive ({reason}) flagged ERROR: {decision.content!r}"
@@ -611,7 +612,7 @@ def test_error_false_positive_warnings_silenced(stderr: str, reason: str) -> Non
 def test_error_false_positive_git_commits_silenced(stdout: str, reason: str) -> None:
     """Git commit log lines (hex prefix or [branch hash] prefix) must not
     be classified as ERROR even when they contain failing/error keywords."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(_bash_event(stdout)))
     assert decision.category != Category.ERROR, (
         f"shadow false positive ({reason}) flagged ERROR: {decision.content!r}"
@@ -620,7 +621,7 @@ def test_error_false_positive_git_commits_silenced(stdout: str, reason: str) -> 
 
 def test_real_error_still_fires_after_tuning() -> None:
     """Sanity: tuning didn't disable legitimate ERROR detection."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(
         _bash_event("", stderr="error: cargo: command not found")
     ))
@@ -630,7 +631,7 @@ def test_real_error_still_fires_after_tuning() -> None:
 
 def test_real_test_results_still_fire_after_tuning() -> None:
     """Sanity: tuning didn't disable legitimate STATUS detection."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     decision = asyncio.run(router.classify_event(
         _bash_event("===== 23 passed, 4 failed in 12.3s =====")
     ))
@@ -666,7 +667,7 @@ def test_bash_post_includes_target_in_context_hint() -> None:
     """When _extract_bash receives both stdout and the originating command,
     the returned context_hint must include the parsed target so the summarizer
     can speak 'twenty-three passed in test_router' instead of bare counts."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     event = _bash_event("23 passed, 4 failed in 12.3s")
     event["tool_input"]["command"] = "pytest tests/test_router.py -v"
     decision = asyncio.run(router.classify_event(event))
@@ -681,7 +682,7 @@ def test_bash_post_includes_target_in_context_hint() -> None:
 def test_bash_post_no_target_falls_back_to_generic_hint() -> None:
     """If the command lacks a recognizable target, context_hint stays generic
     (no garbage in)."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     event = _bash_event("23 passed, 4 failed")
     event["tool_input"]["command"] = "./run_tests.sh"  # no recognized runner
     decision = asyncio.run(router.classify_event(event))
@@ -711,7 +712,7 @@ def test_extract_grep_names_file_when_pattern_missing() -> None:
     """When grep has no pattern but does scope a file, the context_hint must
     name that file ('grep in X') rather than the vague 'grep result' that forced
     model to synthesize 'the search'."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     event = {
         "tool_name": "Grep",
         "tool_input": {"path": "daemon/content_router.py"},  # no pattern
@@ -723,7 +724,7 @@ def test_extract_grep_names_file_when_pattern_missing() -> None:
 
 def test_extract_grep_prefers_pattern_over_file() -> None:
     """A present pattern still wins — it names WHAT was searched for."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     event = {
         "tool_name": "Grep",
         "tool_input": {"pattern": "TODO", "path": "router.py"},
@@ -767,7 +768,7 @@ def test_verbosity_for_per_output(content: str, target: str, expected: str) -> N
 def test_targeted_post_prefixes_target_naturally() -> None:
     """End-to-end: short generic test result + recognizable command should
     speak 'In test_router: 23 passed, 4 failed.' rather than bare counts."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     event = _bash_event("23 passed, 4 failed.")
     event["tool_input"]["command"] = "pytest tests/test_router.py"
     decision = asyncio.run(router.classify_event(event))
@@ -779,7 +780,7 @@ def test_targeted_post_prefixes_target_naturally() -> None:
 
 def test_terse_post_skips_prefix_when_self_evident() -> None:
     """End-to-end: long content already specific shouldn't get prefixed."""
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     long_specific = (
         "ImportError: cannot import name 'foo' from auth.py at line 42. "
         "Module path mismatches expected layout."
@@ -854,7 +855,7 @@ def test_binary_judge_prompt_includes_context_phrase() -> None:
     """End-to-end through the ambiguous branch: the context phrase built from
     the event reaches the summarizer as part of the BINARY_JUDGMENT prompt."""
     summarizer = MockOllamaSummarizer(response="SPEAK")
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
     event = _judge_event("pytest tests/test_router.py", cwd="/Users/dev/myproj")
     decision = asyncio.run(router.classify_event(event))
     assert decision.should_speak is True
@@ -873,7 +874,7 @@ def test_binary_judge_recency_reflected_on_second_identical_output() -> None:
     session) is flagged 'already spoken this session' in the judge prompt — the
     session-local recency signal, sourced from the per-session spoken window."""
     summarizer = MockOllamaSummarizer(response="SPEAK")
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
     event = _judge_event("npm run build:prod", cwd="/Users/dev/myproj")
 
     asyncio.run(router.classify_event(event))
@@ -889,7 +890,7 @@ def test_binary_judge_recency_is_session_scoped() -> None:
     """Recency is per-session: identical output in a DIFFERENT session is still
     FRESH (no cross-session bleed)."""
     summarizer = MockOllamaSummarizer(response="SPEAK")
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
     ev_a = _judge_event("npm run build:prod")
     ev_a["session_id"] = "sess-A"
     ev_b = _judge_event("npm run build:prod")
@@ -906,7 +907,7 @@ def test_enriched_judge_does_not_bypass_gates() -> None:
     the judge. Output with no digit/keyword combo still gets silenced — the
     judge (summarizer) is never called."""
     summarizer = MockOllamaSummarizer(response="SPEAK")
-    router = ContentRouter(config={}, ollama_summarizer=summarizer)
+    router = ContentRouter(config={}, provider=OllamaProvider(summarizer))
     event = _judge_event("echo hi")
     # Bare prose, no digits/domain keyword → fails the ambiguous-branch guard.
     event["tool_response"]["stdout"] = (

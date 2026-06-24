@@ -23,6 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from daemon.content_router import ContentRouter
+from daemon.providers.ollama_provider import OllamaProvider
 # _drop_check_raw is the ROUTER-04 refactored module-level helper.
 # It will be importable after the fix; fall back gracefully for RED phase.
 try:
@@ -44,7 +45,7 @@ class _NullSummarizer:
 
 
 def _make_router() -> ContentRouter:
-    return ContentRouter(config={}, ollama_summarizer=_NullSummarizer())
+    return ContentRouter(config={}, provider=OllamaProvider(_NullSummarizer()))
 
 
 def _fixture(name: str) -> str:

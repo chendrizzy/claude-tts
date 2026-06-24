@@ -32,6 +32,7 @@ from daemon.tts_types import (  # noqa: E402
     RoutedItem,
     RouterDecision,
 )
+from daemon.providers.ollama_provider import OllamaProvider  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +265,7 @@ class TestProperties:
 class TestContentRouterIntegration:
     def _make_router(self) -> ContentRouter:
         return ContentRouter(
-            config={}, ollama_summarizer=MockOllamaSummarizer()
+            config={}, provider=OllamaProvider(MockOllamaSummarizer())
         )
 
     def test_turn_buffer_for_raises_without_callback(self) -> None:
@@ -297,7 +298,7 @@ class TestContentRouterIntegration:
         recorder = FlushRecorder()
         router = ContentRouter(
             config={"routing": {"turn_buffer_idle_ms": 222}},
-            ollama_summarizer=MockOllamaSummarizer(),
+            provider=OllamaProvider(MockOllamaSummarizer()),
         )
         router.set_turn_buffer_callback(recorder)
         buf = router.turn_buffer_for("s1")

@@ -201,8 +201,9 @@ class TestObserve01RequestIdThreading:
         from daemon.tts_types import RouterDecision
 
         # Stub OllamaSummarizer — never called for short error-class fixtures.
+        from daemon.providers.ollama_provider import OllamaProvider
         stub_summarizer = MagicMock()
-        router = ContentRouter(config={}, ollama_summarizer=stub_summarizer)
+        router = ContentRouter(config={}, provider=OllamaProvider(stub_summarizer))
         known_uuid = str(uuid.uuid4())
         event = {
             "command": "tool_event",

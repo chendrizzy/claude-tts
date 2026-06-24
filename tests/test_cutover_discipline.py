@@ -26,6 +26,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from daemon.content_router import ContentRouter, _SPEAKABLE_CATEGORIES  # noqa: E402
 from daemon.tts_types import Category, RouterDecision  # noqa: E402
+from daemon.providers.ollama_provider import OllamaProvider  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ class MockOllamaSummarizer:
 
 
 def _make_router() -> ContentRouter:
-    router = ContentRouter(config={}, ollama_summarizer=MockOllamaSummarizer())
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
     return router
 
 
