@@ -36,7 +36,7 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 # Session id MUST come from the JSON payload — Claude Code does NOT set
 # CLAUDE_SESSION_ID as an env var.
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null)
-SOCKET_PATH="/tmp/tts_daemon.sock"
+SOCKET_PATH="${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}"
 PYTHON_BIN="${CLAUDE_TTS_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.13/bin/python3}"
 if [ ! -x "$PYTHON_BIN" ]; then
     PYTHON_BIN="$(command -v python3 2>/dev/null || true)"

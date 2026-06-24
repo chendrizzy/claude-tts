@@ -43,7 +43,7 @@ fi
 
 # Defensive readiness check. Degrade gracefully — never `exit 0` on failure
 # in a way that hides the daemon being down; just skip the submission.
-SOCKET="/tmp/tts_daemon.sock"
+SOCKET="${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}"
 if [ ! -S "$SOCKET" ]; then
     log "WARN: daemon socket missing — skipping stop_event submission"
     exit 0

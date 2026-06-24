@@ -46,7 +46,7 @@ fi
 # Defensive readiness check. If the socket is missing or unresponsive, attempt
 # to spin up the daemon via the helper. Degrade gracefully — log and skip the
 # submission rather than failing the hook (we already echoed INPUT above).
-SOCKET="/tmp/tts_daemon.sock"
+SOCKET="${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}"
 if [ ! -S "$SOCKET" ] || ! /usr/bin/pgrep -f "python.*tts_daemon.py" > /dev/null 2>&1; then
     log "Daemon not ready — attempting ensure-daemon-ready"
     source "$PLUGIN_ROOT/hooks/ensure-daemon-ready.sh" 2>&1 | tee -a "$LOG_FILE" >&2

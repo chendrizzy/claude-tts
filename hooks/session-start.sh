@@ -19,7 +19,7 @@
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DAEMON_DIR="$PLUGIN_ROOT/daemon"
 DAEMON_SCRIPT="$DAEMON_DIR/tts_daemon.py"
-SOCKET="/tmp/tts_daemon.sock"
+SOCKET="${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}"
 LOG_DIR="$PLUGIN_ROOT/logs"
 PYTHON_BIN="${CLAUDE_TTS_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.13/bin/python3}"
 if [ ! -x "$PYTHON_BIN" ]; then
