@@ -33,7 +33,9 @@ verify:
 		tests/test_content_router.py \
 		tests/test_voicebox_client.py \
 		tests/test_cache_cleanup.py \
-		tests/test_llm_provider.py
+		tests/test_llm_provider.py \
+		tests/test_tts_engines.py \
+		tests/test_platform.py
 
 verify-all:
 	$(PYTHON) -m pytest -q tests

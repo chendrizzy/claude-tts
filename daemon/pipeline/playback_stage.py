@@ -92,6 +92,8 @@ class PlaybackStage:
 
         # Detect platform for audio player selection
         self._platform = platform.system().lower()
+        from daemon.platforms import make_platform
+        self._platform_impl = make_platform()
 
         # OBSERVE-02: epoch timestamp of the last successful afplay exit.
         # ``None`` until the first audible segment completes. Used by the
@@ -365,32 +367,9 @@ class PlaybackStage:
             f"playback start request_id={request_id} path={audio_path}"
         )
         try:
-            if self._platform == 'darwin':
-                # macOS - using create_subprocess_exec (safe, no shell injection)
-                # AUDIO-02: canonical afplay spawn site — this is the only one.
-                afplay_cmd = ['afplay']
-                if self.volume and self.volume != 1.0:
-                    afplay_cmd += ['-v', f'{self.volume:.3f}']
-                afplay_cmd.append(audio_path)
-                proc = await asyncio.create_subprocess_exec(
-                    *afplay_cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
-                )
-            elif self._platform == 'linux':
-                # Linux - try mpv first
-                proc = await asyncio.create_subprocess_exec(
-                    'mpv', '--no-video', '--really-quiet', audio_path,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
-                )
-            else:
-                # Windows or other - try ffplay
-                proc = await asyncio.create_subprocess_exec(
-                    'ffplay', '-nodisp', '-autoexit', audio_path,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
-                )
+            # AUDIO-02: canonical player spawn — delegated to the Platform seam.
+            # macOS afplay (+ -v volume hack), Linux mpv, Windows ffplay.
+            proc = await self._platform_impl.spawn_player(audio_path, self.volume)
 
             if state is not None:
                 state.current_proc = proc
