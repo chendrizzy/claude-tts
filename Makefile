@@ -35,7 +35,8 @@ verify:
 		tests/test_cache_cleanup.py \
 		tests/test_llm_provider.py \
 		tests/test_tts_engines.py \
-		tests/test_platform.py
+		tests/test_platform.py \
+		tests/test_paths.py
 
 verify-all:
 	$(PYTHON) -m pytest -q tests
