@@ -81,3 +81,55 @@ def test_setup_skill_stub_exists_with_frontmatter():
     assert fm, f"{SKILL_MD} has no closed frontmatter block"
     assert "name: tts-setup" in fm, f"{SKILL_MD} frontmatter must declare name: tts-setup"
     assert "description:" in fm, f"{SKILL_MD} frontmatter missing description:"
+
+
+HOOKS_JSON = ROOT / "hooks" / "hooks.json"
+
+# Forbidden substrings in any NEW shell file (spec section 6). Author identity
+# "chendrizzy" + the github URL is intended PUBLIC attribution, NOT PII — allowed.
+# Add a new pattern = add one line.
+PII_FORBIDDEN = (
+    "/Volumes/",          # absolute personal paths
+    "com.justinchen",     # private launchd label
+    "@gmail",             # real email
+    "profile_id",         # Voicebox personal profile
+    "/opt/anaconda",      # personal interpreter path
+    "anaconda3",          # personal interpreter path
+    "mlx_python",         # personal mlx interpreter path
+)
+
+# Every NEW shell file 3b introduces.
+NEW_SHELL_FILES = (
+    PLUGIN_JSON,
+    MARKETPLACE_JSON,
+    COMMANDS_DIR / "setup.md",
+    COMMANDS_DIR / "voice.md",
+    COMMANDS_DIR / "status.md",
+    COMMANDS_DIR / "doctor.md",
+    COMMANDS_DIR / "uninstall.md",
+    SKILL_MD,
+)
+
+
+def test_no_pii_in_new_shell_files():
+    for path in NEW_SHELL_FILES:
+        assert path.is_file(), f"new shell file missing: {path}"
+        text = path.read_text(encoding="utf-8")
+        for needle in PII_FORBIDDEN:
+            assert needle not in text, f"PII '{needle}' leaked into {path}"
+
+
+def test_hooks_json_is_portable():
+    assert HOOKS_JSON.is_file(), f"missing {HOOKS_JSON}"
+    data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
+    found_command = False
+    for event_entries in data["hooks"].values():
+        for entry in event_entries:
+            for hook in entry["hooks"]:
+                cmd = hook["command"]
+                found_command = True
+                assert "${CLAUDE_PLUGIN_ROOT}" in cmd, (
+                    f"hook command not plugin-rooted: {cmd!r}"
+                )
+                assert "/Volumes/" not in cmd, f"absolute path leaked into hook: {cmd!r}"
+    assert found_command, "hooks.json declared no command hooks"
