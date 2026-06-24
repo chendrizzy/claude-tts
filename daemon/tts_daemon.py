@@ -56,7 +56,8 @@ from enum import Enum
 import random
 
 # Production Constants
-SOCKET_PATH = "/tmp/tts_daemon.sock"
+from daemon.paths import config_path, socket_path
+SOCKET_PATH = socket_path()
 PID_FILE = Path.home() / ".claude" / "tts_daemon.pid"
 LOG_DIR = Path.home() / ".claude" / "logs" / "tts"
 
@@ -2198,6 +2199,7 @@ class TTSDaemon:
         # Project-relative path; daemon may be launched from anywhere so try
         # both the package dir and the home-directory copy.
         candidates = [
+            config_path(),
             Path(__file__).resolve().parent.parent / "config" / "tts_user_config.json",
             Path.home() / ".claude" / "tts" / "config" / "tts_user_config.json",
         ]
