@@ -109,19 +109,15 @@ class GenerateStage:
         # Ensure cache directory exists
         os.makedirs(cache_dir, exist_ok=True)
 
-        # Lazy import edge_tts
-        self._edge_tts = None
+        # Lazy-constructed EdgeTTSEngine (wraps the edge-tts library).
+        self._edge_engine = None
 
-    def _get_edge_tts(self):
-        """Lazy load edge_tts module."""
-        if self._edge_tts is None:
-            try:
-                import edge_tts
-                self._edge_tts = edge_tts
-            except ImportError:
-                logger.error("edge_tts not installed. Run: pip install edge-tts")
-                raise
-        return self._edge_tts
+    def _get_edge_engine(self):
+        """Lazily construct the EdgeTTSEngine (wraps the edge-tts library)."""
+        if self._edge_engine is None:
+            from daemon.engines.edge_tts_engine import EdgeTTSEngine
+            self._edge_engine = EdgeTTSEngine()
+        return self._edge_engine
 
     async def _get_kokoro(self):
         """Lazily construct and start the persistent Kokoro worker engine."""
@@ -258,24 +254,17 @@ class GenerateStage:
                         generated_at=time.time()
                     )
 
-                # Generate audio — engine-dependent.
+                # Generate audio via the TTSEngine seam (kokoro keeps its own
+                # persistent-worker lazy spawn; edge-tts is a thin EdgeTTSEngine).
                 if self.engine in ("kokoro", "mlx-audio"):
-                    kokoro = await self._get_kokoro()
-                    ok = await kokoro.synthesize(
-                        text=chunk, out_path=audio_path,
-                        voice=voice, speed=self.speed,
-                    )
-                    if not ok:
-                        logger.error(
-                            f"Kokoro synth failed for chunk {chunk_index}"
-                        )
-                        self._stats['generation_errors'] += 1
-                        return None
+                    engine = await self._get_kokoro()
                 else:
-                    # Edge-TTS (Azure network voice).
-                    edge_tts = self._get_edge_tts()
-                    communicate = edge_tts.Communicate(chunk, voice)
-                    await communicate.save(audio_path)
+                    engine = self._get_edge_engine()
+                ok = await engine.synthesize(chunk, audio_path, voice, self.speed)
+                if not ok:
+                    logger.error(f"{self.engine} synth failed for chunk {chunk_index}")
+                    self._stats['generation_errors'] += 1
+                    return None
 
                 generation_time_ms = (time.time() - start_time) * 1000
                 self._stats['total_generation_time_ms'] += generation_time_ms
