@@ -37,3 +37,47 @@ def test_marketplace_json_is_valid_and_consistent():
     # INVARIANT: single self-marketplace points at repo root
     assert first["source"] == "./"
     assert isinstance(market["metadata"]["version"], str) and market["metadata"]["version"]
+
+
+COMMANDS_DIR = ROOT / "commands"
+SKILL_MD = ROOT / "skills" / "tts-setup" / "SKILL.md"
+COMMAND_NAMES = ("setup", "voice", "status", "doctor", "uninstall")
+
+
+def _frontmatter(text):
+    """Return the YAML frontmatter block (between the first two '---' lines).
+
+    Requires '---' on line 1 (no leading blank lines / BOM). Returns "" if the
+    file does not open with a frontmatter fence.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    body = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return "\n".join(body)
+        body.append(line)
+    return ""  # no closing fence
+
+
+def test_all_five_commands_exist_with_frontmatter():
+    for name in COMMAND_NAMES:
+        md = COMMANDS_DIR / f"{name}.md"
+        assert md.is_file(), f"missing command {md}"
+        text = md.read_text(encoding="utf-8")
+        assert text.startswith("---"), f"{md} must open with '---' on line 1"
+        fm = _frontmatter(text)
+        assert fm, f"{md} has no closed frontmatter block"
+        assert "name:" in fm, f"{md} frontmatter missing name:"
+        assert "description:" in fm, f"{md} frontmatter missing description:"
+
+
+def test_setup_skill_stub_exists_with_frontmatter():
+    assert SKILL_MD.is_file(), f"missing {SKILL_MD}"
+    text = SKILL_MD.read_text(encoding="utf-8")
+    assert text.startswith("---"), f"{SKILL_MD} must open with '---' on line 1"
+    fm = _frontmatter(text)
+    assert fm, f"{SKILL_MD} has no closed frontmatter block"
+    assert "name: tts-setup" in fm, f"{SKILL_MD} frontmatter must declare name: tts-setup"
+    assert "description:" in fm, f"{SKILL_MD} frontmatter missing description:"
