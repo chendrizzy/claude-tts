@@ -52,7 +52,6 @@ from daemon.tts_types import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover — avoid circular imports at runtime
-    from daemon.ollama_summarizer import OllamaSummarizer
     from daemon.providers.base import LLMProvider
     from daemon.pipeline.queue_manager import QueueManager
 
@@ -357,16 +356,8 @@ class ContentRouter:
         config: dict,
         provider: Optional["LLMProvider"] = None,
         queue_manager: Optional["QueueManager"] = None,
-        *,
-        ollama_summarizer=None,
     ) -> None:
         self.config = config or {}
-        # ponytail: transitional back-compat — callers still passing a bare
-        # OllamaSummarizer get it wrapped in OllamaProvider. Drop this kwarg once
-        # the call-sites migrate to provider= (e.g. during the fork).
-        if provider is None and ollama_summarizer is not None:
-            from daemon.providers.ollama_provider import OllamaProvider
-            provider = OllamaProvider(ollama_summarizer)
         self.provider = provider
         self.queue_manager = queue_manager
 
