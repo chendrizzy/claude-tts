@@ -50,6 +50,17 @@ def test_render_launchd_plist_injects_no_pii():
 
 from daemon.platforms import make_platform  # noqa: E402
 from daemon.platforms.base import PlatformMacOS, PlatformLinux  # noqa: E402
+import types
+import daemon.platforms.base as base_mod  # noqa: E402
+from daemon.platforms.base import PlatformWindows  # noqa: E402
+
+
+def _fake_run(calls):
+    """Replace subprocess.run: record the argv list, return rc 0."""
+    def run(cmd, *a, **k):
+        calls.append(cmd)
+        return types.SimpleNamespace(returncode=0)
+    return run
 
 
 def test_macos_plist_path_uses_launchagents():
@@ -66,10 +77,54 @@ def test_macos_render_service_round_trips():
     assert plistlib.loads(xml.encode())["Label"] == "com.claude-tts.daemon"
 
 
-def test_linux_install_service_not_implemented_yet():
-    # Linux systemd install is Plan 4; the seam exists but raises until then.
+def test_linux_install_writes_unit_and_enables(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    calls = []
+    monkeypatch.setattr(base_mod.shutil, "which", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(base_mod.subprocess, "run", _fake_run(calls))
+    monkeypatch.setattr(base_mod.getpass, "getuser", lambda: "tester")
+
+    PlatformLinux().install_service(
+        program_args=["/x/.venv/bin/python", "-m", "daemon.tts_daemon"],
+        env={"PYTHONUNBUFFERED": "1"},
+    )
+
+    unit = (tmp_path / "systemd" / "user" / "claude-tts.service").read_text()
+    assert "ExecStart=/x/.venv/bin/python -m daemon.tts_daemon" in unit
+    assert "Type=simple" in unit and "Restart=always" in unit
+    assert ["systemctl", "--user", "daemon-reload"] in calls
+    assert ["systemctl", "--user", "enable", "--now", "claude-tts.service"] in calls
+    assert ["loginctl", "enable-linger", "tester"] in calls
+
+
+def test_linux_install_without_systemctl_raises(monkeypatch):
+    monkeypatch.setattr(base_mod.shutil, "which", lambda n: None)
     try:
         PlatformLinux().install_service(program_args=["python"], env={})
+        assert False, "expected RuntimeError"
+    except RuntimeError as e:
+        assert "systemctl" in str(e)
+
+
+def test_linux_uninstall_disables_and_removes(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    unit_dir = tmp_path / "systemd" / "user"
+    unit_dir.mkdir(parents=True)
+    unit_file = unit_dir / "claude-tts.service"
+    unit_file.write_text("dummy")
+    calls = []
+    monkeypatch.setattr(base_mod.subprocess, "run", _fake_run(calls))
+
+    PlatformLinux().uninstall_service()
+
+    assert ["systemctl", "--user", "disable", "--now", "claude-tts.service"] in calls
+    assert ["systemctl", "--user", "daemon-reload"] in calls
+    assert not unit_file.exists()
+
+
+def test_windows_install_service_not_supported():
+    try:
+        PlatformWindows().install_service(program_args=["python"], env={})
         assert False, "expected NotImplementedError"
-    except NotImplementedError:
-        pass
+    except NotImplementedError as e:
+        assert "WSL2" in str(e) or "not supported" in str(e).lower()

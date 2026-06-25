@@ -9,6 +9,7 @@ here (launchd); Linux systemd install is Plan 4.
 from __future__ import annotations
 
 import asyncio
+import getpass
 import os
 import platform as _platform
 import shutil
@@ -17,7 +18,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional
 
-from daemon.platforms.service import render_launchd_plist, DEFAULT_LABEL
+from daemon.platforms.service import render_launchd_plist, render_systemd_unit, DEFAULT_LABEL
 
 
 class Platform(ABC):
@@ -108,6 +109,8 @@ def _linux_player_argv(player: str, audio_path: str) -> List[str]:
 
 
 class PlatformLinux(Platform):
+    UNIT_NAME = "claude-tts.service"
+
     def build_player_cmd(self, audio_path: str, volume: float) -> List[str]:
         # volume intentionally ignored: TTS-specific gain is macOS-only (afplay -v);
         # on Linux the audio daemon (PipeWire/PulseAudio/ALSA) owns system volume.
@@ -117,10 +120,46 @@ class PlatformLinux(Platform):
         # Nothing installed: best-effort mpv argv (fails loudly via rc != 0).
         return _linux_player_argv("mpv", audio_path)
 
+    def _unit_path(self) -> Path:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        base = Path(xdg) if xdg else Path.home() / ".config"
+        return base / "systemd" / "user" / self.UNIT_NAME
+
+    def install_service(self, *, program_args: List[str], env: dict) -> None:
+        if shutil.which("systemctl") is None:
+            raise RuntimeError(
+                "systemctl not found — this Linux box has no systemd user session. "
+                "Start the daemon manually: python -m daemon.tts_daemon"
+            )
+        path = self._unit_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(render_systemd_unit(program_args=program_args, env=env),
+                        encoding="utf-8")
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        # enable --now = enable + start; this is the critical step.
+        subprocess.run(["systemctl", "--user", "enable", "--now", self.UNIT_NAME],
+                       check=True, capture_output=True)
+        # Persist across logout/reboot even without an active login session.
+        subprocess.run(["loginctl", "enable-linger", getpass.getuser()],
+                       capture_output=True)
+
+    def uninstall_service(self) -> None:
+        subprocess.run(["systemctl", "--user", "disable", "--now", self.UNIT_NAME],
+                       capture_output=True)
+        self._unit_path().unlink(missing_ok=True)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+
 
 class PlatformWindows(Platform):
     def build_player_cmd(self, audio_path: str, volume: float) -> List[str]:
         return ["ffplay", "-nodisp", "-autoexit", audio_path]
+
+    def install_service(self, *, program_args: List[str], env: dict) -> None:
+        raise NotImplementedError(
+            "Windows service install is not supported yet — run the daemon "
+            "manually (python -m daemon.tts_daemon), or use WSL2/Docker. "
+            "See CONTRIBUTING.md."
+        )
 
 
 def make_platform(system: Optional[str] = None) -> Platform:
