@@ -3,6 +3,7 @@
   "voice": {
     "engine": "edge-tts",
     "_engine_options": ["edge-tts", "kokoro", "voicebox", "say", "espeak"],
+    "_engine_fallback": "say (macOS) / espeak (Linux): zero-dep system engine — guaranteed audio with no Python deps or network",
     "_engine_note": "edge-tts = Azure network voices, no local ML deps (lowest-friction default; needs the 'edge' extra). kokoro = local MLX Kokoro-82M (offline, Apple-Silicon; needs a separate mlx-audio interpreter via MLX_PYTHON). voicebox = local Voicebox app via REST.",
     "name": "en-US-AvaNeural",
     "_kokoro_voices": ["af_heart", "af_bella", "am_michael", "bf_emma", "bm_george"],

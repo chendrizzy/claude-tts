@@ -41,6 +41,11 @@ Default: `edge-tts` (cross-platform, no ML deps). If Apple Silicon, offer Kokoro
 If a Voicebox app is reachable at its configured URL, offer `voicebox`. Record
 the chosen `engine` and a default `voice_name` (`en-US-AvaNeural` for edge-tts).
 
+If no ML engine is available and `uv sync --extra edge` cannot install edge-tts
+(e.g. offline), choose `say` (macOS) / `espeak` (Linux) — the zero-dependency
+**system engine**. It always produces audio on a bare machine (using the OS
+default voice; `voice_name` is ignored for this engine).
+
 ## Step 4 — Choose the LLM backend
 
 Default: local **Ollama** with model `qwen2.5-coder:1.5b`. Offer to pull it:
