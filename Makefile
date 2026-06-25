@@ -14,7 +14,7 @@
 
 PYTHON ?= python3
 
-.PHONY: verify verify-all verify-install sweep-logs restart help
+.PHONY: verify verify-all verify-install sweep-logs restart manifests help
 
 help:
 	@echo "make verify      - binding quality gate (deterministic, no live deps)"
@@ -22,6 +22,7 @@ help:
 	@echo "make verify-install - install-readiness dry-run (layout, perms, setup modules)"
 	@echo "make sweep-logs  - idempotent TTS log retention sweep (R3 hygiene)"
 	@echo "make restart     - safe daemon restart (picks up on-disk code; resets health uptime)"
+	@echo "make manifests   - sync plugin manifest versions from pyproject.toml"
 
 verify:
 	$(PYTHON) tests/fixtures/spoken_corpus/_generate.py
@@ -52,6 +53,9 @@ verify-install:
 
 sweep-logs:
 	sh scripts/sweep_tts_logs.sh
+
+manifests:
+	$(PYTHON) scripts/build_manifests.py
 
 restart:
 	sh restart_daemon.sh

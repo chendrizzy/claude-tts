@@ -133,3 +133,33 @@ def test_hooks_json_is_portable():
                 )
                 assert "/Volumes/" not in cmd, f"absolute path leaked into hook: {cmd!r}"
     assert found_command, "hooks.json declared no command hooks"
+
+
+# --- Plan 4d: version-DRY (scripts/build_manifests.py) ---
+import re as _re
+import tomllib as _tomllib  # noqa: F401  (kept for clarity; build_manifests uses it)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import build_manifests as _bm  # noqa: E402
+
+_ROOT4D = Path(__file__).resolve().parent.parent
+
+
+def test_sync_version_updates_all_version_fields():
+    blob = '{\n  "version": "0.0.1",\n  "x": {\n    "version": "0.0.1"\n  }\n}\n'
+    out = _bm.sync_version(blob, "9.9.9")
+    assert out.count('"version": "9.9.9"') == 2
+    assert "0.0.1" not in out
+
+
+def test_pyproject_version_reads_project_version():
+    assert _bm.pyproject_version('[project]\nname = "x"\nversion = "1.2.3"\n') == "1.2.3"
+
+
+def test_manifests_version_matches_pyproject():
+    version = _bm.pyproject_version((_ROOT4D / "pyproject.toml").read_text())
+    for rel in (".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"):
+        text = (_ROOT4D / rel).read_text()
+        found = _re.findall(r'"version"\s*:\s*"([^"]*)"', text)
+        assert found, f"{rel}: no version field found"
+        for v in found:
+            assert v == version, f"{rel}: {v} != pyproject {version}"
