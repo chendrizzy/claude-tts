@@ -109,15 +109,19 @@ class GenerateStage:
         # Ensure cache directory exists
         os.makedirs(cache_dir, exist_ok=True)
 
-        # Lazy-constructed EdgeTTSEngine (wraps the edge-tts library).
-        self._edge_engine = None
+        # Lazy-constructed engine via make_engine (edge-tts/say/espeak).
+        self._engine = None  # cached make_engine result (edge-tts/say/espeak)
 
-    def _get_edge_engine(self):
-        """Lazily construct the EdgeTTSEngine (wraps the edge-tts library)."""
-        if self._edge_engine is None:
-            from daemon.engines.edge_tts_engine import EdgeTTSEngine
-            self._edge_engine = EdgeTTSEngine()
-        return self._edge_engine
+    def _get_engine(self):
+        """Lazily construct the configured stateless engine via make_engine.
+
+        Covers edge-tts / say / espeak. Kokoro keeps its own async getter
+        (`_get_kokoro`) — it owns a persistent subprocess worker.
+        """
+        if self._engine is None:
+            from daemon.engines import make_engine
+            self._engine = make_engine(self.engine)
+        return self._engine
 
     async def _get_kokoro(self):
         """Lazily construct and start the persistent Kokoro worker engine."""
@@ -259,7 +263,7 @@ class GenerateStage:
                 if self.engine in ("kokoro", "mlx-audio"):
                     engine = await self._get_kokoro()
                 else:
-                    engine = self._get_edge_engine()
+                    engine = self._get_engine()
                 ok = await engine.synthesize(chunk, audio_path, voice, self.speed)
                 if not ok:
                     logger.error(f"{self.engine} synth failed for chunk {chunk_index}")

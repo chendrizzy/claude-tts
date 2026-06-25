@@ -152,6 +152,34 @@ def test_make_engine_system_alias_returns_system():
     assert isinstance(make_engine("system"), SystemTTSEngine)
 
 
+# --- GenerateStage routes engine selection through make_engine ---
+def test_generate_stage_get_engine_say_returns_system():
+    from daemon.pipeline.generate_stage import GenerateStage
+    from daemon.engines import SystemTTSEngine
+    stage = GenerateStage.__new__(GenerateStage)  # bypass __init__
+    stage.engine = "say"
+    stage._engine = None
+    assert isinstance(stage._get_engine(), SystemTTSEngine)
+
+
+def test_generate_stage_get_engine_defaults_to_edge():
+    from daemon.pipeline.generate_stage import GenerateStage
+    from daemon.engines import EdgeTTSEngine
+    stage = GenerateStage.__new__(GenerateStage)
+    stage.engine = "edge-tts"
+    stage._engine = None
+    assert isinstance(stage._get_engine(), EdgeTTSEngine)
+
+
+def test_generate_stage_get_engine_is_cached():
+    from daemon.pipeline.generate_stage import GenerateStage
+    stage = GenerateStage.__new__(GenerateStage)
+    stage.engine = "say"
+    stage._engine = None
+    first = stage._get_engine()
+    assert stage._get_engine() is first  # lazy + cached, like _get_edge_engine was
+
+
 def test_make_engine_case_insensitive():
     from daemon.engines import SystemTTSEngine
     assert isinstance(make_engine("SAY"), SystemTTSEngine)
