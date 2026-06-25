@@ -32,6 +32,8 @@ verify:
 		tests/test_text_utils.py \
 		tests/test_router_corpus.py \
 		tests/test_queue_manager.py \
+		tests/test_playback_cutoff.py \
+		tests/test_spoken_log.py \
 		tests/test_content_router.py \
 		tests/test_voicebox_client.py \
 		tests/test_cache_cleanup.py \

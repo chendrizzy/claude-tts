@@ -112,3 +112,48 @@ def test_zero_real_word_noise_drops_with_bundled_dict(monkeypatch):
     # confirm the agent-id dump is still dropped (the exact CI failure on Linux).
     monkeypatch.setattr(_tu, "_SYSTEM_DICT", _tu._load_bundled_dict())
     assert _tu.is_speakable("agent- agent- agent-") is False
+
+
+# --- git SHA-range leak (sha1..sha2) ----------------------------------------
+import re as _re  # noqa: E402
+
+_HEXHASH = _re.compile(r"\b(?=[0-9a-fA-F]*[a-fA-F])(?=[0-9a-fA-F]*[0-9])[0-9a-fA-F]{7,40}\b")
+
+
+def test_sha_range_both_halves_dropped() -> None:
+    """A git revision range 'sha1..sha2' must drop BOTH hashes. The second half
+    was shielded by the dotted-identifier lookbehind and leaked to speech
+    ('Pushed e46ca57..3b4b4f1' left '3b4b4f1')."""
+    out = normalize_for_speech("Pushed e46ca57..3b4b4f1 main to main, tree clean")
+    assert not _HEXHASH.search(out), f"hex SHA leaked after normalization: {out!r}"
+    assert "main to main" in out
+    assert "tree clean" in out
+
+
+def test_pure_numeric_range_survives() -> None:
+    """A non-hash numeric range is real data — keep it (callback-gated drop)."""
+    out = normalize_for_speech("ports 1234567..2345678 are open")
+    assert "1234567" in out and "2345678" in out
+
+
+# --- filename.extension spoken cadence (no false sentence pause) -------------
+def test_filename_extension_spoken_as_dot() -> None:
+    """'name.ext' for a known extension becomes 'name dot ext' so the engine does
+    not read the dot as a sentence boundary and pause mid-utterance."""
+    out = _tu.speak_file_extensions("I edited claude-tts.tsx and ran main.py today")
+    assert "claude-tts.tsx" not in out and "main.py" not in out
+    assert "claude-tts dot tsx" in out
+    assert "main dot py" in out
+
+
+def test_filename_extension_leaves_prose_alone() -> None:
+    """Real sentence ends, decimals, and abbreviations are untouched."""
+    assert _tu.speak_file_extensions("Done. Next step.") == "Done. Next step."
+    assert _tu.speak_file_extensions("version 3.5 is ready") == "version 3.5 is ready"
+    assert _tu.speak_file_extensions("e.g. this and U.S.A too") == "e.g. this and U.S.A too"
+
+
+def test_filename_extension_idempotent() -> None:
+    once = _tu.speak_file_extensions("see config.toml now")
+    assert "config dot toml" in once
+    assert once == _tu.speak_file_extensions(once)

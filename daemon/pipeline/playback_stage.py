@@ -19,6 +19,7 @@ import platform
 import time
 
 from .generate_stage import AudioSegment
+from .. import spoken_log  # per-session spoken-output log (best-effort; never raises)
 
 if TYPE_CHECKING:
     from ..tts_types import Category
@@ -38,6 +39,13 @@ class PlaybackState:
     # duration of `await proc.wait()` so QueueManager can SIGTERM it for ERROR
     # pre-emption. None when no segment is actively playing.
     current_proc: Optional[asyncio.subprocess.Process] = None
+    # CUTOFF FIX: request_id of the utterance currently being spoken. Unlike
+    # current_segment (nulled between chunks INSIDE the per-session lock that
+    # flush_buffer must also acquire — so it is always None at flush time), this
+    # PERSISTS across the per-chunk handoff. flush_buffer uses it so a BLACK-tier
+    # drift flush does not discard the in-progress utterance's own tail chunks as
+    # if they were backlog (the "long commit message cut off mid-read" bug).
+    current_request_id: Optional[str] = None
 
 
 class PlaybackStage:
@@ -188,6 +196,12 @@ class PlaybackStage:
                 async with lock:  # Per-session lock only!
                     state.is_playing = True
                     state.current_segment = segment
+                    # CUTOFF FIX: persist the utterance id so a BLACK-tier
+                    # flush_buffer (which runs between chunks, after
+                    # current_segment is nulled below) can tell THIS utterance's
+                    # own tail chunks apart from genuine drift and keep them. Not
+                    # cleared at chunk end — it marks the utterance in progress.
+                    state.current_request_id = segment.request_id
 
                     # Play audio (state passed so _play_audio can publish proc
                     # for ERROR pre-emption via PlaybackStage.get_current_proc).
@@ -204,6 +218,13 @@ class PlaybackStage:
                         state.total_duration_ms += segment.duration_ms
                         self._stats['segments_played'] += 1
                         self._stats['total_playback_time_ms'] += segment.duration_ms
+                        # Record what was actually spoken (best-effort; never
+                        # raises) for the statusline segment + /tts:log command.
+                        spoken_log.append(
+                            segment.text,
+                            session_id=session_id,
+                            category=getattr(segment.category, "value", None),
+                        )
                     else:
                         state.errors += 1
                         self._stats['playback_errors'] += 1
@@ -589,6 +610,17 @@ class PlaybackStage:
         lock = self.session_locks[session_id]
         dropped = 0
 
+        # CUTOFF FIX: when this is a gentle (keep_errors) drift flush, never drop
+        # the tail of the utterance currently being spoken — those buffered chunks
+        # are the thing the user wants to hear, not backlog. We match on the
+        # persisted current_request_id (current_segment is None at flush time,
+        # nulled inside this same lock between chunks). keep_errors=False is a hard
+        # reset and intentionally drops everything, including the current utterance.
+        state = self.session_states.get(session_id)
+        current_rid = (
+            state.current_request_id if (keep_errors and state is not None) else None
+        )
+
         async with lock:
             preserved: list[AudioSegment] = []
 
@@ -599,6 +631,8 @@ class PlaybackStage:
                     break
 
                 if keep_errors and seg.category == _Category.ERROR:
+                    preserved.append(seg)
+                elif current_rid is not None and seg.request_id == current_rid:
                     preserved.append(seg)
                 else:
                     dropped += 1

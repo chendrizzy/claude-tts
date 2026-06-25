@@ -100,7 +100,7 @@ CASES = [
 
     # ---- diffstat / entities / strike ----------------------------------
     {"id": "diffstat_bar", "raw": "uv.lock | 24 +++",
-     "require": ["uv.lock"], "forbid": ["+++", "| 24"], "forbid_re": [],
+     "require": ["uv dot lock"], "forbid": ["+++", "| 24"], "forbid_re": [],
      "note": "git diffstat ' | 24 +++' noise stripped"},
     {"id": "html_entities", "raw": "use &gt; to redirect and &amp; to background",
      "require": ["redirect", "background"], "forbid": ["&gt;", "&amp;"], "forbid_re": [],
@@ -153,7 +153,7 @@ CASES = [
      "require": ["magnitude", "5 + x", "bounded"], "forbid": [], "forbid_re": [],
      "note": "SAFETY: inline '| 5 +' is prose/math, not a diffstat tail (diffstat is end-of-line only)"},
     {"id": "trailing_pipe_shell_preserved", "raw": "echo done | tee log.txt |",
-     "require": ["echo done | tee log.txt"], "forbid": [], "forbid_re": [],
+     "require": ["echo done | tee log dot txt"], "forbid": [], "forbid_re": [],
      "note": "SAFETY: a shell pipeline ending in '|' is not a markdown table row (needs BOTH leading and trailing pipe)"},
     {"id": "single_col_table_sep", "raw": "| Status |\n|--------|\n| OK |",
      "require": ["Status", "OK"], "forbid": ["--------", "|--------"], "forbid_re": [],
@@ -296,7 +296,7 @@ CASES = [
      "raw": ("## Summary\n\nFixed the **race condition** in `queue_manager.py`:\n\n"
              "- preempt guard added\n- cascade capped at `YELLOW`\n\n"
              "See [the diff](http://x.com/d) for details."),
-     "require": ["Summary", "race condition", "queue_manager.py", "preempt guard added",
+     "require": ["Summary", "race condition", "queue_manager dot py", "preempt guard added",
                  "cascade capped at YELLOW", "See the diff for details"],
      "forbid": ["##", "**", "`", "](", "http"], "forbid_re": [r"(?m)^\s*-\s"],
      "note": "end-to-end: every markdown construct in one realistic answer"},

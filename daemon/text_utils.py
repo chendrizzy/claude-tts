@@ -208,6 +208,12 @@ _HASH_CHAIN_RE = re.compile(r"\b[0-9a-fA-F]{4,}(?:-[0-9a-fA-F]{2,}){1,}")
 # while a leading word-char/dot still protects "version1a2b" and "config.a1b2".
 _HEX_TOKEN_RE = re.compile(r"(?<![\w.])[0-9a-fA-F]{7,40}(?![0-9a-fA-F])")
 _HEX_LONG_RE = re.compile(r"(?<![\w.])[0-9a-fA-F]{16,}(?![0-9a-fA-F])")
+# Git revision range "sha1..sha2" (e46ca57..3b4b4f1). The single-token rule above
+# has a (?<![\w.]) lookbehind that protects dotted identifiers ("config.a1b2"),
+# which ALSO shields the SECOND sha in a range (it sits right after the '..'),
+# leaking it to speech. Match the range as a unit BEFORE the single-token pass and
+# drop it when it really is a pair of hashes (pure-numeric ranges survive).
+_HEX_RANGE_RE = re.compile(r"(?<![\w.])[0-9a-fA-F]{7,40}\.\.[0-9a-fA-F]{7,40}(?![0-9a-fA-F])")
 # base64-ish blob (callback-gated so long lowercase words / camelCase survive).
 _B64_RE = re.compile(r"(?<![\w/])[A-Za-z0-9+/]{16,}={0,2}(?![\w/])")
 # Operator runs with no natural single-symbol reading.
@@ -286,6 +292,12 @@ def _strip_code_artifacts(line: str) -> str:
     # 16+ hex run: drop only if it has a hex LETTER (a real blob); a pure-digit
     # run is a long NUMBER (order/account id) and is kept.
     line = _HEX_LONG_RE.sub(lambda m: " " if _looks_like_hex_blob(m.group(0)) else m.group(0), line)
+    # Git "sha1..sha2" range: drop the whole pair before the single-token pass,
+    # whose dotted-identifier lookbehind would otherwise shield the second sha.
+    line = _HEX_RANGE_RE.sub(
+        lambda m: " " if _looks_like_hash(m.group(0).replace(".", "")) else m.group(0),
+        line,
+    )
     line = _HEX_TOKEN_RE.sub(lambda m: " " if _looks_like_hash(m.group(0)) else m.group(0), line)
     line = _B64_RE.sub(lambda m: " " if _looks_like_b64(m.group(0)) else m.group(0), line)
     line = _ARROW_RE.sub(" to ", line)
@@ -695,6 +707,46 @@ def is_speakable(text: str) -> bool:
     return True
 
 
+# Curated code/file extensions whose leading '.' must be spoken as " dot " so the
+# TTS engine does not read it as a sentence terminator and pause mid-utterance
+# (reported on "claude-tts.tsx"). A curated allowlist keeps prose safe: "e.g.",
+# "U.S.A", and decimals like "3.5" never match.
+_SPEAKABLE_EXTS = frozenset({
+    "py", "pyi", "ipynb", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "jsonc",
+    "md", "mdx", "txt", "rst", "rs", "go", "rb", "java", "kt", "kts", "swift",
+    "c", "h", "cc", "cpp", "cxx", "hpp", "cs", "php", "pl", "lua", "jl", "dart",
+    "ex", "exs", "sh", "bash", "zsh", "fish", "ps1", "bat", "sql", "html", "htm",
+    "css", "scss", "sass", "less", "vue", "svelte", "astro", "yml", "yaml", "toml",
+    "ini", "cfg", "conf", "env", "lock", "xml", "csv", "tsv", "log", "gitignore",
+    "dockerfile", "makefile", "gradle", "proto", "graphql",
+})
+# basename.ext — extension must START with a letter (so decimals "3.5" never
+# match) and be reasonably short. The basename allows letters/digits/_/- (so
+# "claude-tts.tsx" is one unit).
+_FILE_EXT_RE = re.compile(r"\b([A-Za-z0-9_-]+)\.([A-Za-z][A-Za-z0-9]{0,9})\b")
+
+
+def speak_file_extensions(text: str) -> str:
+    """Speak "name.ext" as "name dot ext" for known file extensions.
+
+    The bare '.' between a basename and its extension is otherwise read by the TTS
+    engine as a sentence terminator, inserting an unnatural pause mid-sentence
+    (e.g. "claude-tts.tsx"). Only a curated set of real code/file extensions is
+    rewritten, so a sentence end ("Done. Next."), a decimal ("3.5"), and prose
+    abbreviations ("e.g.") are left alone. Idempotent: the output contains no
+    "name.ext" pair to re-match.
+    """
+    if not text or "." not in text:
+        return text
+
+    def _repl(m: "re.Match[str]") -> str:
+        if m.group(2).lower() in _SPEAKABLE_EXTS:
+            return f"{m.group(1)} dot {m.group(2)}"
+        return m.group(0)
+
+    return _FILE_EXT_RE.sub(_repl, text)
+
+
 def normalize_for_speech(text: str) -> str:
     """Destructure markdown/markup to clean speech. Pure, idempotent, safe.
 
@@ -711,6 +763,11 @@ def normalize_for_speech(text: str) -> str:
         if nxt == result:
             break
         result = nxt
+    # Filenames: speak "name.ext" as "name dot ext" so the engine doesn't read the
+    # extension dot as a sentence end (an unnatural mid-sentence pause). Applied
+    # after the markup fixed point and before any path humanization; idempotent
+    # (the output contains no "name.ext" pair to re-match).
+    result = speak_file_extensions(result)
     return result
 
 
