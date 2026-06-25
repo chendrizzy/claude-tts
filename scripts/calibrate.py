@@ -47,3 +47,59 @@ def select_mini_eval(rows: list[dict], *, bulk_cap: int = 8) -> list[dict]:
             out.append(r)
             seen[klass] = n + 1
     return out
+
+
+from daemon.content_router import _drop_check_raw  # noqa: E402
+from daemon.text_utils import is_speakable, normalize_for_speech  # noqa: E402
+
+
+def floor_drops(text: str) -> bool:
+    """True if the deterministic pipeline would DROP this before any model sees it.
+
+    Mirrors the production gate order (see scripts/eval_model.floor_drops).
+    """
+    if _drop_check_raw(text):
+        return True
+    if not is_speakable(normalize_for_speech(text)):
+        return True
+    return False
+
+
+async def score_calibration(provider, rows: list[dict]) -> dict:
+    """Score a provider on `rows` using the production decision: floor AND judge.
+
+    final_speak = (floor passes) AND (provider.judge == True), compared to label.
+    Returns a result dict with confusion/precision/recall, or {"error": ...} if
+    the provider is unreachable (any judge call raises).
+    """
+    tp = fp = tn = fn = 0
+    try:
+        for r in rows:
+            text, label = r["text"], r["label"]
+            if floor_drops(text):
+                final_speak = False
+            else:
+                final_speak = bool(await provider.judge(text[:600], "Bash", ""))
+            truth = label == "speak"
+            if final_speak and truth:
+                tp += 1
+            elif final_speak and not truth:
+                fp += 1
+            elif not final_speak and not truth:
+                tn += 1
+            else:
+                fn += 1
+    except Exception as exc:  # unreachable backend / transport failure
+        return {"error": repr(exc)}
+
+    total = tp + fp + tn + fn
+    precision = tp / (tp + fp) if (tp + fp) else 1.0
+    recall = tp / (tp + fn) if (tp + fn) else 1.0
+    accuracy = (tp + tn) / total if total else 0.0
+    return {
+        "total": total,
+        "confusion": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "accuracy": round(accuracy, 4),
+    }
