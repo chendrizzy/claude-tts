@@ -31,7 +31,7 @@ phrase it. Synthesis and playback are swappable behind seams.
   `null` (a deterministic, no-LLM floor — see below).
 - **TTS engine** (`daemon/pipeline/`) — `kokoro` (local MLX), `voicebox`
   (local app via REST), and `edge-tts` (cross-platform Azure voices).
-- **Playback** — macOS `afplay` today (Linux/`paplay` seam is on the roadmap).
+- **Playback** — macOS `afplay`; Linux auto-detects `ffplay`/`mpv`/`pw-play`/`paplay`/`aplay` (decoders first); Windows `ffplay`.
 
 ### No-LLM fallback
 
@@ -43,8 +43,8 @@ hard dependency.
 ## Requirements
 
 - **Python ≥ 3.11** and [`uv`](https://docs.astral.sh/uv/).
-- **macOS** (uses `afplay` + `launchd`). Linux support is planned via the
-  platform seam.
+- **macOS** (`afplay` + `launchd`) or **Linux** (auto-detected audio player +
+  `systemd --user`). On Windows, run the daemon manually or use WSL2/Docker.
 - For the default **LLM provider**: a local [Ollama](https://ollama.com) with a
   small model, e.g. `ollama pull qwen2.5-coder:1.5b`. Or point at any
   OpenAI-compatible server. Or run with no LLM at all.
