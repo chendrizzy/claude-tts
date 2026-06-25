@@ -103,3 +103,23 @@ async def score_calibration(provider, rows: list[dict]) -> dict:
         "recall": round(recall, 4),
         "accuracy": round(accuracy, 4),
     }
+
+
+# Defaults are conservative and gibberish-protective: precision guards against
+# speaking noise (the shipped 0%-gibberish win); recall guards against muting
+# real findings. Tunable, but these are the safe floor for "is the model better
+# than the deterministic baseline?".
+MIN_PRECISION = 0.9
+MIN_RECALL = 0.8
+
+
+def calibration_mode(result: dict, *, min_precision: float = MIN_PRECISION,
+                     min_recall: float = MIN_RECALL) -> str:
+    """'smart' if the model is reachable and clears both bars, else 'deterministic'."""
+    if "error" in result:
+        return "deterministic"
+    if result.get("precision", 0.0) < min_precision:
+        return "deterministic"
+    if result.get("recall", 0.0) < min_recall:
+        return "deterministic"
+    return "smart"

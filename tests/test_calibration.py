@@ -85,3 +85,26 @@ def test_score_calibration_reports_unreachable_provider():
     result = asyncio.run(score_calibration(provider, rows))
     assert "error" in result
     assert "refused" in result["error"]
+
+
+from scripts.calibrate import calibration_mode  # noqa: E402
+
+
+def test_calibration_mode_smart_when_clean():
+    result = {"precision": 1.0, "recall": 0.9, "accuracy": 0.95}
+    assert calibration_mode(result) == "smart"
+
+
+def test_calibration_mode_deterministic_on_low_precision():
+    # Speaking gibberish (false-speaks) drops precision -> protect the 0%-gibberish win.
+    result = {"precision": 0.7, "recall": 0.95, "accuracy": 0.85}
+    assert calibration_mode(result) == "deterministic"
+
+
+def test_calibration_mode_deterministic_on_low_recall():
+    result = {"precision": 1.0, "recall": 0.5, "accuracy": 0.7}
+    assert calibration_mode(result) == "deterministic"
+
+
+def test_calibration_mode_deterministic_on_unreachable():
+    assert calibration_mode({"error": "ConnectionError('refused')"}) == "deterministic"
