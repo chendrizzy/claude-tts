@@ -82,3 +82,33 @@ def test_humanize_paths_multiple_paths_in_one_string() -> None:
     assert "projects/audio" in out
     assert "DISK" not in out
     assert "/Users/" not in out
+
+
+# --- Linux/CI dictionary fallback (bundled public-domain word list) ----------
+# Regression for the CI-caught macOS/Linux divergence: is_speakable's
+# zero-real-word noise gate is conditional on a populated _SYSTEM_DICT. Linux/CI
+# hosts ship no /usr/share/dict/words, so the gate was silently disabled there
+# and noise like "agent- agent- agent-" was wrongly KEPT (spoken). The bundle
+# makes the dict present on every platform.
+import daemon.text_utils as _tu  # noqa: E402
+
+
+def test_bundled_dict_loads_and_has_common_words():
+    d = _tu._load_bundled_dict()
+    assert len(d) > 100000, "bundled word list should be comprehensive"
+    for w in ("build", "error", "agent", "race", "condition"):
+        assert w in d, f"bundled dict missing common word: {w}"
+    assert "agent-" not in d  # a trailing-hyphen fragment is never a real word
+
+
+def test_system_dict_is_never_empty():
+    # Must be populated on EVERY platform (OS list on macOS, bundle on Linux/CI);
+    # an empty dict silently disables the zero-real-word noise drop.
+    assert len(_tu._SYSTEM_DICT) > 0
+
+
+def test_zero_real_word_noise_drops_with_bundled_dict(monkeypatch):
+    # Simulate a host without /usr/share/dict/words: force the bundled dict and
+    # confirm the agent-id dump is still dropped (the exact CI failure on Linux).
+    monkeypatch.setattr(_tu, "_SYSTEM_DICT", _tu._load_bundled_dict())
+    assert _tu.is_speakable("agent- agent- agent-") is False

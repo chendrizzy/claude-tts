@@ -9,7 +9,9 @@ be relied on. Any utility added here hits every spoken utterance.
 """
 from __future__ import annotations
 
+import gzip
 import html
+import os
 import re
 
 # Match absolute paths, home-relative, and relative-with-./ paths that have
@@ -434,18 +436,34 @@ _WORD_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]{1,}")
 _VOWELS = frozenset("aeiouyAEIOUY")
 
 
+def _load_bundled_dict() -> frozenset[str]:
+    """Load the bundled public-domain word list (daemon/data/words.txt.gz) into a
+    lowercased frozenset. Bundled so the dictionary gate behaves identically on
+    every platform: Linux/CI hosts ship no /usr/share/dict/words, which would
+    silently disable the zero-real-word noise drop (gibberish then spoken). See
+    daemon/data/NOTICE.md for provenance."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "data", "words.txt.gz")
+    try:
+        with gzip.open(path, "rt", encoding="utf-8", errors="ignore") as fh:
+            return frozenset(w.strip().lower() for w in fh if w.strip())
+    except OSError:
+        return frozenset()
+
+
 def _load_system_dict() -> frozenset[str]:
-    """Load /usr/share/dict/words ONCE into a lowercased frozenset. Returns an
-    EMPTY frozenset if the file is absent/unreadable — callers must treat an
-    empty dict as 'skip the dictionary part of the gate' so the rest of
-    is_speakable still works on systems without a word list."""
+    """Load a word list ONCE into a lowercased frozenset: the OS list
+    (/usr/share/dict/words) if present, else the bundled public-domain copy so
+    the dictionary gate works identically on every platform. Returns EMPTY only
+    if even the bundle is unreadable — callers treat an empty dict as 'skip the
+    dictionary part of the gate' so the rest of is_speakable still works."""
     for path in ("/usr/share/dict/words", "/usr/dict/words"):
         try:
             with open(path, encoding="utf-8", errors="ignore") as fh:
                 return frozenset(w.strip().lower() for w in fh if w.strip())
         except OSError:
             continue
-    return frozenset()
+    return _load_bundled_dict()
 
 
 _SYSTEM_DICT = _load_system_dict()
