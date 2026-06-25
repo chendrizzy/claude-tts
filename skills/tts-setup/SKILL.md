@@ -21,9 +21,10 @@ plugin). Run all Python through the project's uv venv: `uv run python ...`.
 ## Step 1 — Detect platform + architecture
 
 Run `uname -s` (Darwin/Linux) and `uname -m` (arm64/x86_64). Record both. On
-`Darwin`+`arm64` the machine is Apple Silicon (Kokoro is available). On Linux,
-note that background-service install is not yet automated (Plan 4) — you will
-run the daemon manually at Step 6.
+`Darwin`+`arm64` the machine is Apple Silicon (Kokoro is available). Background
+service install is automated on both platforms (launchd on macOS, `systemd
+--user` on Linux); Step 6 falls back to a manual launch only when no `systemd`
+user session is present.
 
 ## Step 2 — Ensure uv + environment
 

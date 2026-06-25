@@ -26,5 +26,10 @@ logs/
 # OS cruft
 .DS_Store
 
-# Local Claude Code project state (settings.local.json etc.) — never publish
+# Demo-generator scratch preview (the committed artifact is docs/media/demo.gif)
+docs/media/_preview.png
+
+# Local Claude Code / agent tooling state — never publish
 .claude/
+.planning/
+.remember/
