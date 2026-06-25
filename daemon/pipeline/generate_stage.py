@@ -20,6 +20,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Engines that emit a WAVE container; their cache files must be named .wav so
+# extension-keyed players (macOS afplay) open them. edge-tts emits mp3.
+_WAV_ENGINES = ("kokoro", "mlx-audio", "say", "espeak", "system")
+
+
+def _audio_ext_for(engine: str) -> str:
+    """Cache-file extension for an engine's container ('wav' or 'mp3')."""
+    return "wav" if str(engine or "").lower() in _WAV_ENGINES else "mp3"
+
 
 @dataclass
 class AudioSegment:
@@ -73,9 +82,10 @@ class GenerateStage:
         self._mlx_python = mlx_python
         self._kokoro_model = kokoro_model
         self._kokoro = None  # lazily constructed KokoroEngine
-        # Output container differs per engine: Kokoro writes WAV (local PCM),
-        # edge-tts returns MP3. afplay + ffprobe handle both.
-        self._audio_ext = "wav" if self.engine in ("kokoro", "mlx-audio") else "mp3"
+        # Output container differs per engine: Kokoro/say/espeak write WAV;
+        # edge-tts returns MP3. Cache files are named with the correct extension
+        # so extension-keyed players (macOS afplay) open them correctly.
+        self._audio_ext = _audio_ext_for(self.engine)
 
         # Voicebox backend (config-gated): when engine=="voicebox", synthesis +
         # playback are offloaded to the local Voicebox app and generate() yields

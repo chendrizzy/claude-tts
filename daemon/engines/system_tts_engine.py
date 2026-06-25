@@ -31,18 +31,20 @@ class SystemTTSEngine(TTSEngine):
     ) -> Optional[List[str]]:
         """Build the argv for the OS speech binary, or None if none is available.
 
-        Forces a WAVE container so the written file is playable regardless of
-        ``out_path``'s extension (the players sniff content, not extension).
-        ``text`` is the final positional arg — passed via exec (no shell), so
-        it is injection-safe.
+        Forces a WAVE container so the written file is a valid WAV.  The pipeline
+        names the cache file ``.wav`` (via ``_audio_ext_for``) so that
+        extension-keyed players (macOS afplay dispatches by extension, not content)
+        open it correctly.  ``text`` is placed after a ``--`` end-of-options
+        separator — passed via exec (no shell), so it is injection-safe and a
+        leading-dash chunk is treated as text, not an option flag.
         """
-        wpm = int(_DEFAULT_WPM * speed) if speed and speed > 0 else _DEFAULT_WPM
+        wpm = max(80, int(_DEFAULT_WPM * speed)) if speed and speed > 0 else _DEFAULT_WPM
         if platform.system() == "Darwin":
             cmd = ["say", "--file-format=WAVE", "--data-format=LEI16@22050",
                    "-o", out_path]
             if speed and speed != 1.0:
                 cmd += ["-r", str(wpm)]
-            cmd.append(text)
+            cmd += ["--", text]
             return cmd
         # Linux / other: espeak (or espeak-ng) writes WAV with -w.
         binary = shutil.which("espeak") or shutil.which("espeak-ng")
@@ -51,7 +53,7 @@ class SystemTTSEngine(TTSEngine):
         cmd = [binary, "-w", out_path]
         if speed and speed != 1.0:
             cmd += ["-s", str(wpm)]
-        cmd.append(text)
+        cmd += ["--", text]
         return cmd
 
     async def synthesize(
