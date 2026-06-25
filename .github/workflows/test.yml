@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv + Python ${{ matrix.python }}
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: uv sync --extra edge --extra dev
+
+      - name: Binding quality gate (make verify)
+        run: uv run make verify
+
+# The full async suite (make verify-all) is intentionally NOT in the blocking
+# path for Phase 1: it needs pytest-asyncio and (optionally) a live Ollama/socket.
+# The deterministic `make verify` gate is the binding definition of "done".
+# On ubuntu, one test self-skips (the real macOS say+afinfo integration test).
