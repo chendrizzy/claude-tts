@@ -41,6 +41,7 @@ verify:
 		tests/test_plugin_manifest.py \
 		tests/test_calibration.py \
 		tests/test_service_render.py \
+		tests/test_systemd_render.py \
 		tests/test_config_render.py
 
 verify-all:
