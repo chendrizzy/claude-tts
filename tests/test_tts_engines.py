@@ -131,3 +131,37 @@ def test_system_speed_maps_to_rate(tmp_path, monkeypatch):
     asyncio.run(e.synthesize("hi", str(tmp_path / "a.wav"), "v", 2.0))
     assert "-r" in captured["cmd"]
     assert captured["cmd"][captured["cmd"].index("-r") + 1] == "350"  # 175 * 2.0
+
+
+# --- make_engine factory (mirrors make_provider) ---
+from daemon.engines import make_engine
+
+
+def test_make_engine_say_returns_system():
+    from daemon.engines import SystemTTSEngine
+    assert isinstance(make_engine("say"), SystemTTSEngine)
+
+
+def test_make_engine_espeak_returns_system():
+    from daemon.engines import SystemTTSEngine
+    assert isinstance(make_engine("espeak"), SystemTTSEngine)
+
+
+def test_make_engine_system_alias_returns_system():
+    from daemon.engines import SystemTTSEngine
+    assert isinstance(make_engine("system"), SystemTTSEngine)
+
+
+def test_make_engine_case_insensitive():
+    from daemon.engines import SystemTTSEngine
+    assert isinstance(make_engine("SAY"), SystemTTSEngine)
+
+
+def test_make_engine_edge_returns_edge():
+    assert isinstance(make_engine("edge-tts"), EdgeTTSEngine)
+
+
+def test_make_engine_unknown_defaults_to_edge():
+    # default safety net — mirrors make_provider's "default: ollama" branch.
+    assert isinstance(make_engine("totally-unknown"), EdgeTTSEngine)
+    assert isinstance(make_engine(""), EdgeTTSEngine)
