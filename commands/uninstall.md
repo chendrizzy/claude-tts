@@ -8,8 +8,11 @@ plugin itself — plugin removal is done through the Claude Code marketplace.
 
 Steps:
 
-1. **Stop and remove the OS service** — unload and delete the launchd plist on macOS,
-   or stop and disable the systemd `--user` unit on Linux.
+1. **Stop and remove the OS service** — call the platform seam:
+   `uv run python -c "from daemon.platforms import make_platform; make_platform().uninstall_service()"`.
+   On macOS this boots out and deletes the launchd plist; on Linux it runs
+   `systemctl --user disable --now claude-tts.service` and removes the unit file.
+   (On Windows the seam is a no-op beyond manual cleanup.)
 2. **Kill the daemon** — terminate the running daemon process if present and confirm
    the socket at `${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}` is
    gone.
