@@ -8,7 +8,6 @@ __pycache__/
 .venv/
 venv/
 .uv/
-uv.lock
 
 # Runtime artifacts
 *.sock
