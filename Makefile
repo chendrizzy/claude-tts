@@ -14,11 +14,12 @@
 
 PYTHON ?= python3
 
-.PHONY: verify verify-all sweep-logs restart help
+.PHONY: verify verify-all verify-install sweep-logs restart help
 
 help:
 	@echo "make verify      - binding quality gate (deterministic, no live deps)"
 	@echo "make verify-all  - full test suite (async tests need: pip install pytest-asyncio)"
+	@echo "make verify-install - install-readiness dry-run (layout, perms, setup modules)"
 	@echo "make sweep-logs  - idempotent TTS log retention sweep (R3 hygiene)"
 	@echo "make restart     - safe daemon restart (picks up on-disk code; resets health uptime)"
 
@@ -44,6 +45,9 @@ verify:
 
 verify-all:
 	$(PYTHON) -m pytest -q tests
+
+verify-install:
+	bash tests/test-install-dry-run.sh
 
 sweep-logs:
 	sh scripts/sweep_tts_logs.sh

@@ -10,6 +10,7 @@ echo
 # Test 1: Script directory resolution
 echo "TEST 1: Script directory resolution"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo "✓ SCRIPT_DIR resolved to: $SCRIPT_DIR"
 if [ -d "$SCRIPT_DIR" ]; then
     echo "✓ SCRIPT_DIR exists"
@@ -43,22 +44,20 @@ else
 fi
 echo
 
-# Test 3: Requirements file validation
-echo "TEST 3: Requirements file validation"
-if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
-    echo "✓ requirements.txt exists"
-    echo "  Dependencies:"
-    grep -E "^[^#]" "$SCRIPT_DIR/requirements.txt" | grep -v "^$" | sed 's/^/    - /'
+# Test 3: Dependency manifest validation
+echo "TEST 3: Dependency manifest validation"
+if [ -f "$REPO_ROOT/pyproject.toml" ]; then
+    echo "✓ pyproject.toml exists"
 else
-    echo "✗ requirements.txt not found"
+    echo "✗ pyproject.toml not found"
     exit 1
 fi
 echo
 
 # Test 4: Critical directories exist
 echo "TEST 4: Critical directories"
-for dir in daemon hooks config scripts; do
-    if [ -d "$SCRIPT_DIR/$dir" ]; then
+for dir in daemon hooks scripts; do
+    if [ -d "$REPO_ROOT/$dir" ]; then
         echo "✓ $dir/ exists"
     else
         echo "✗ $dir/ not found"
@@ -71,16 +70,16 @@ echo
 echo "TEST 5: Critical files"
 CRITICAL_FILES=(
     "daemon/tts_daemon.py"
-    "daemon/enhanced_hook_integration.py"
-    "hooks/session-start.sh"
-    "hooks/ensure-daemon-ready.sh"
-    "hooks/hooks.json"
-    "tts-launcher-integration.sh"
+    ".claude-plugin/plugin.json"
     ".claude-plugin/marketplace.json"
+    "hooks/hooks.json"
+    "hooks/session-start.sh"
+    "skills/tts-setup/SKILL.md"
+    "pyproject.toml"
 )
 
 for file in "${CRITICAL_FILES[@]}"; do
-    if [ -f "$SCRIPT_DIR/$file" ]; then
+    if [ -f "$REPO_ROOT/$file" ]; then
         echo "✓ $file exists"
     else
         echo "✗ $file not found"
@@ -92,15 +91,15 @@ echo
 # Test 6: Script permissions
 echo "TEST 6: Script permissions"
 EXEC_SCRIPTS=(
-    "tts-launcher-integration.sh"
     "hooks/session-start.sh"
-    "hooks/ensure-daemon-ready.sh"
     "hooks/post-tool-use.sh"
-    "scripts/tts_system_control.sh"
+    "hooks/pre-tool-use.sh"
+    "hooks/speech_output_hook.sh"
+    "scripts/sweep_tts_logs.sh"
 )
 
 for script in "${EXEC_SCRIPTS[@]}"; do
-    if [ -x "$SCRIPT_DIR/$script" ]; then
+    if [ -x "$REPO_ROOT/$script" ]; then
         echo "✓ $script is executable"
     else
         echo "✗ $script not executable"
@@ -194,9 +193,9 @@ echo
 
 # Test 12: Config file validation
 echo "TEST 12: Configuration files"
-if [ -f "$SCRIPT_DIR/config/tts_user_config.json" ]; then
+if [ -f "$REPO_ROOT/config/tts_user_config.json" ]; then
     echo "✓ User config exists"
-    if python3 -c "import json; json.load(open('$SCRIPT_DIR/config/tts_user_config.json'))" 2>/dev/null; then
+    if python3 -c "import json; json.load(open('$REPO_ROOT/config/tts_user_config.json'))" 2>/dev/null; then
         echo "✓ User config is valid JSON"
     else
         echo "✗ User config is invalid JSON"
@@ -204,13 +203,13 @@ if [ -f "$SCRIPT_DIR/config/tts_user_config.json" ]; then
     fi
 fi
 
-if [ -f "$SCRIPT_DIR/hooks/hooks.json" ]; then
+if [ -f "$REPO_ROOT/hooks/hooks.json" ]; then
     echo "✓ hooks.json exists"
-    if python3 -c "import json; json.load(open('$SCRIPT_DIR/hooks/hooks.json'))" 2>/dev/null; then
+    if python3 -c "import json; json.load(open('$REPO_ROOT/hooks/hooks.json'))" 2>/dev/null; then
         echo "✓ hooks.json is valid JSON"
 
         # Check if SessionStart is configured
-        if grep -q "SessionStart" "$SCRIPT_DIR/hooks/hooks.json"; then
+        if grep -q "SessionStart" "$REPO_ROOT/hooks/hooks.json"; then
             echo "✓ SessionStart hook configured"
         else
             echo "✗ SessionStart hook not configured"
@@ -225,18 +224,40 @@ echo
 
 # Test 13: Path resolution compatibility
 echo "TEST 13: Path resolution patterns"
-if grep -q '${CLAUDE_PLUGIN_ROOT}' "$SCRIPT_DIR/hooks/hooks.json"; then
+if grep -q '${CLAUDE_PLUGIN_ROOT}' "$REPO_ROOT/hooks/hooks.json"; then
     echo "✓ hooks.json uses \${CLAUDE_PLUGIN_ROOT}"
 else
     echo "✗ hooks.json missing \${CLAUDE_PLUGIN_ROOT}"
     exit 1
 fi
 
-if grep -q 'PLUGIN_ROOT.*dirname.*BASH_SOURCE' "$SCRIPT_DIR/hooks/session-start.sh"; then
+if grep -q 'PLUGIN_ROOT.*dirname.*BASH_SOURCE' "$REPO_ROOT/hooks/session-start.sh"; then
     echo "✓ session-start.sh uses dynamic path resolution"
 else
     echo "✗ session-start.sh missing dynamic path resolution"
     exit 1
+fi
+echo
+
+# Test 14: Setup readiness (Plan 3c)
+echo "TEST 14: Setup readiness (Plan 3c)"
+if python3 "$REPO_ROOT/scripts/calibrate.py" --backend null | grep -q '"deterministic"'; then
+    echo "✓ scripts/calibrate.py --backend null -> deterministic"
+else
+    echo "✗ scripts/calibrate.py null path failed"
+    exit 1
+fi
+if python3 -c "import sys; sys.path.insert(0,'$REPO_ROOT'); import daemon.config_io, daemon.platforms.service" 2>/dev/null; then
+    echo "✓ daemon.config_io + daemon.platforms.service import"
+else
+    echo "✗ setup modules do not import"
+    exit 1
+fi
+if grep -q "Full bootstrap/calibration/service-install logic is implemented in Plan 3c" "$REPO_ROOT/skills/tts-setup/SKILL.md"; then
+    echo "✗ skills/tts-setup/SKILL.md is still the stub"
+    exit 1
+else
+    echo "✓ skills/tts-setup/SKILL.md is expanded"
 fi
 echo
 
