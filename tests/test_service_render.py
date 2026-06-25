@@ -46,3 +46,30 @@ def test_render_launchd_plist_injects_no_pii():
     )
     for needle in PII_FORBIDDEN:
         assert needle not in xml, f"renderer injected PII: {needle}"
+
+
+from daemon.platforms import make_platform  # noqa: E402
+from daemon.platforms.base import PlatformMacOS, PlatformLinux  # noqa: E402
+
+
+def test_macos_plist_path_uses_launchagents():
+    p = PlatformMacOS()
+    path = p.plist_path()
+    assert str(path).endswith("/Library/LaunchAgents/com.claude-tts.daemon.plist")
+
+
+def test_macos_render_service_round_trips():
+    import plistlib
+    p = PlatformMacOS()
+    xml = p.render_service(program_args=["/x/python", "-m", "daemon.tts_daemon"],
+                           env={"PYTHONUNBUFFERED": "1"})
+    assert plistlib.loads(xml.encode())["Label"] == "com.claude-tts.daemon"
+
+
+def test_linux_install_service_not_implemented_yet():
+    # Linux systemd install is Plan 4; the seam exists but raises until then.
+    try:
+        PlatformLinux().install_service(program_args=["python"], env={})
+        assert False, "expected NotImplementedError"
+    except NotImplementedError:
+        pass

@@ -9,7 +9,7 @@ personal data. Linux systemd rendering is Plan 4.
 from __future__ import annotations
 
 import plistlib
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 DEFAULT_LABEL = "com.claude-tts.daemon"  # sanitized; matches the fork's hooks.
 
