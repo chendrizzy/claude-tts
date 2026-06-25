@@ -25,3 +25,6 @@ logs/
 
 # OS cruft
 .DS_Store
+
+# Local Claude Code project state (settings.local.json etc.) — never publish
+.claude/
