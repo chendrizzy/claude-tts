@@ -69,14 +69,21 @@ definition.
 ## Step 6 — Install the OS service + start the daemon
 
 Compute the launcher: `PYTHON = ROOT/.venv/bin/python`, `program_args =
-[PYTHON, "-m", "daemon.tts_daemon"]`, `env = {"PYTHONUNBUFFERED": "1", "PATH": <current PATH>}`.
+[PYTHON, "-m", "daemon.tts_daemon"]`, `env = {"PYTHONUNBUFFERED": "1",
+"PYTHONPATH": ROOT, "PATH": <current PATH>}`. (`PYTHONPATH=ROOT` lets
+`-m daemon.tts_daemon` resolve the package regardless of the service's working
+directory — required for systemd `--user`, harmless for launchd.)
 
 macOS — install and start via the platform seam:
 `uv run python -c "from daemon.platforms import make_platform; make_platform().install_service(program_args=[...], env={...})"`.
 This writes `~/Library/LaunchAgents/com.claude-tts.daemon.plist` and
-`launchctl bootstrap`s it. Linux — service automation is Plan 4; start the daemon
-manually (`uv run python -m daemon.tts_daemon &`) and tell the user a systemd
-unit will land later.
+`launchctl bootstrap`s it. Linux — install and start via the same platform seam:
+`uv run python -c "from daemon.platforms import make_platform; make_platform().install_service(program_args=[...], env={...})"`.
+This renders `~/.config/systemd/user/claude-tts.service`, then runs
+`systemctl --user daemon-reload`, `systemctl --user enable --now claude-tts.service`,
+and `loginctl enable-linger` (so the daemon survives logout/reboot). If `systemctl`
+is absent (no systemd user session), the seam raises a clear message — fall back to
+starting the daemon manually (`uv run python -m daemon.tts_daemon &`).
 
 Verify the socket binds at
 `${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}`.
