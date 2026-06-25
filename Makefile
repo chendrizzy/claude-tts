@@ -37,7 +37,8 @@ verify:
 		tests/test_tts_engines.py \
 		tests/test_platform.py \
 		tests/test_paths.py \
-		tests/test_plugin_manifest.py
+		tests/test_plugin_manifest.py \
+		tests/test_calibration.py
 
 verify-all:
 	$(PYTHON) -m pytest -q tests
