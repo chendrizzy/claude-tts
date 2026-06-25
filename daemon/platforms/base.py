@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import os
 import platform as _platform
+import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -86,10 +87,35 @@ class PlatformMacOS(Platform):
         self.plist_path().unlink(missing_ok=True)
 
 
+# Linux audio players, decoders-first. ponytail: ffplay/mpv decode BOTH .wav
+# (espeak) and .mp3 (edge-tts); pw-play/paplay/aplay are WAV-only and would fail
+# silently on an .mp3, so they are the tail — reached only on minimal boxes,
+# where the engine is espeak → WAV anyway. Upgrade path: if mp3-on-minimal
+# becomes common, document "edge-tts on Linux needs ffplay or mpv".
+_LINUX_PLAYERS = ("ffplay", "mpv", "pw-play", "paplay", "aplay")
+
+
+def _linux_player_argv(player: str, audio_path: str) -> List[str]:
+    """Quiet, no-GUI argv for a given Linux player."""
+    if player == "ffplay":
+        return ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path]
+    if player == "mpv":
+        return ["mpv", "--no-video", "--really-quiet", audio_path]
+    if player == "aplay":
+        return ["aplay", "-q", audio_path]
+    # pw-play / paplay: the filename is the only required positional arg.
+    return [player, audio_path]
+
+
 class PlatformLinux(Platform):
     def build_player_cmd(self, audio_path: str, volume: float) -> List[str]:
-        # Matches prior inline behavior: mpv, volume not applied.
-        return ["mpv", "--no-video", "--really-quiet", audio_path]
+        # volume intentionally ignored: TTS-specific gain is macOS-only (afplay -v);
+        # on Linux the audio daemon (PipeWire/PulseAudio/ALSA) owns system volume.
+        for player in _LINUX_PLAYERS:
+            if shutil.which(player):
+                return _linux_player_argv(player, audio_path)
+        # Nothing installed: best-effort mpv argv (fails loudly via rc != 0).
+        return _linux_player_argv("mpv", audio_path)
 
 
 class PlatformWindows(Platform):
