@@ -108,3 +108,23 @@ def test_calibration_mode_deterministic_on_low_recall():
 
 def test_calibration_mode_deterministic_on_unreachable():
     assert calibration_mode({"error": "ConnectionError('refused')"}) == "deterministic"
+
+
+from scripts.calibrate import build_provider  # noqa: E402
+from daemon.providers.null_provider import NullProvider  # noqa: E402
+
+
+def test_build_provider_null():
+    assert isinstance(build_provider("null"), NullProvider)
+
+
+def test_build_provider_openai_constructs_without_network():
+    # OpenAICompatProvider construction must not touch the network.
+    p = build_provider("openai", base_url="http://localhost:1234/v1", model="m", api_key="k")
+    assert p.__class__.__name__ == "OpenAICompatProvider"
+
+
+def test_build_provider_ollama_constructs_without_network():
+    # OllamaClient/OllamaSummarizer construction is lazy (no connection here).
+    p = build_provider("ollama", model="qwen2.5-coder:1.5b")
+    assert p.__class__.__name__ == "OllamaProvider"

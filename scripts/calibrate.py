@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""Setup-time calibration helpers for /tts:setup.
+"""Setup-time calibration for /tts:setup.
 
-Loads the labeled oracle and selects a stratified mini-subset for calibration.
-Provider scoring and the smart-vs-deterministic decision are added in later
-steps; the pure selection logic here is unit-tested in `make verify`.
+Loads the labeled oracle, scores the chosen LLM provider against a stratified
+mini-subset (the production floor AND the provider's judge), and decides smart
+mode (use the LLM) vs deterministic mode (deterministic floor only). Pure
+selection/scoring/decision logic is unit-tested in `make verify`; the live
+provider call runs only at setup time.
+
+Usage:
+  python3 scripts/calibrate.py --backend ollama --model qwen2.5-coder:1.5b --json
+  python3 scripts/calibrate.py --backend openai --base-url URL --model M --api-key-env KEY
+  python3 scripts/calibrate.py --backend null
 """
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -123,3 +133,53 @@ def calibration_mode(result: dict, *, min_precision: float = MIN_PRECISION,
     if result.get("recall", 0.0) < min_recall:
         return "deterministic"
     return "smart"
+
+
+def build_provider(backend: str, *, model: str = "", base_url: str = "",
+                   api_key: str = "", timeout_s: float = 8.0):
+    """Construct an LLMProvider for the chosen backend. No network at construction."""
+    from daemon.providers.null_provider import NullProvider
+    backend = backend.lower()
+    if backend == "null":
+        return NullProvider()
+    if backend == "openai":
+        from daemon.providers.openai_compat import OpenAICompatProvider
+        return OpenAICompatProvider(base_url=base_url, model=model,
+                                    api_key=api_key, timeout_s=timeout_s)
+    # default: ollama
+    from daemon.ollama_integration import OllamaClient
+    from daemon.ollama_summarizer import OllamaSummarizer
+    from daemon.providers.ollama_provider import OllamaProvider
+    summarizer = OllamaSummarizer(OllamaClient(), model=model, timeout_s=timeout_s)
+    return OllamaProvider(summarizer)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Calibrate the TTS LLM backend for setup.")
+    ap.add_argument("--backend", required=True, choices=["ollama", "openai", "null"])
+    ap.add_argument("--model", default="")
+    ap.add_argument("--base-url", default="")
+    ap.add_argument("--api-key-env", default="",
+                    help="env var holding the API key (never pass the key on argv)")
+    ap.add_argument("--oracle", default=str(DEFAULT_ORACLE))
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    if args.backend == "null":
+        # No model to score; deterministic mode is the definition of 'null'.
+        print(json.dumps({"mode": "deterministic", "reason": "no-llm backend"}))
+        return 0
+
+    api_key = os.environ.get(args.api_key_env, "") if args.api_key_env else ""
+    provider = build_provider(args.backend, model=args.model,
+                              base_url=args.base_url, api_key=api_key)
+    rows = select_mini_eval(load_oracle(Path(args.oracle)))
+    result = asyncio.run(score_calibration(provider, rows))
+    mode = calibration_mode(result)
+    out = {"mode": mode, **result}
+    print(json.dumps(out, indent=2) if args.json else json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
