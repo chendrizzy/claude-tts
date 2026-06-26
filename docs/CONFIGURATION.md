@@ -184,12 +184,10 @@ None are required; none are secrets. See [`.env.example`](../.env.example).
 | `CLAUDE_TTS_RATE` | speech rate delta | `+20%` |
 | `CLAUDE_TTS_PITCH` | pitch shift | `+3Hz` |
 | `CLAUDE_TTS_VOICE_STYLE` | edge-tts style | `expressive` |
-| `OLLAMA_HOST` | Ollama endpoint | `http://127.0.0.1:11434` |
 | `MLX_PYTHON` | interpreter with `mlx-audio` (**kokoro only**) | `python3` on `PATH` |
 | `KOKORO_MODEL` | Kokoro model id | `mlx-community/Kokoro-82M-bf16` |
 | `KOKORO_VOICE` | Kokoro voice | `af_heart` |
 | `KOKORO_LANG` | Kokoro language (`a` US, `b` UK, …) | `a` |
-| `CLAUDE_TTS_LAUNCHD_LABEL` | macOS LaunchAgent label | `com.claude-tts.daemon` |
 | `CLAUDE_SESSION_ID` | injected by Claude Code at runtime — **not user-set** | — |
 
 Voice-tuning env vars (`CLAUDE_TTS_RATE`/`PITCH`/`VOICE_STYLE`, `KOKORO_*`)
