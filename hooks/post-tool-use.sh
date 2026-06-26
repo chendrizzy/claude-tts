@@ -9,8 +9,11 @@
 # Read JSON input from stdin
 INPUT=$(cat)
 
-# Always echo the input first (passthrough so subsequent hooks see data)
-echo "$INPUT"
+# Always echo the input first (passthrough so subsequent hooks see data).
+# Cursor wrappers set CLAUDE_TTS_PASSTHROUGH=false so postToolUse stdout stays clean.
+if [[ "${CLAUDE_TTS_PASSTHROUGH:-true}" == "true" ]]; then
+    echo "$INPUT"
+fi
 
 # Skip if TTS is disabled
 TTS_ENABLED="${CLAUDE_TTS_ENABLED:-true}"

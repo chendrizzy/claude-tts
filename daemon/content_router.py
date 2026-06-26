@@ -581,7 +581,7 @@ class ContentRouter:
             return self._silence(event, reason="stop_event with empty content")
 
         # Drop filter on the assistant text itself
-        dropped = self._drop_check(content_raw)
+        dropped = self._drop_check(content_raw, prose=True)  # turn summary: skip stdout-shape vetoes
         if dropped is not None:
             return self._silence(event, reason=dropped)
 
@@ -1225,13 +1225,19 @@ class ContentRouter:
 
     # ------- Drop filter --------------------------------------------------
 
-    def _drop_check(self, content: str) -> Optional[str]:
-        """Run the regex drop filter. Returns drop-reason or None."""
+    def _drop_check(self, content: str, prose: bool = False) -> Optional[str]:
+        """Run the regex drop filter. Returns drop-reason or None.
+
+        ``prose=True`` (stop_event turn summaries) SKIPS the MID-CONTENT patterns
+        (symbol runs, git-diff-stat, git-commit-line) that false-positive on
+        ordinary markdown in assistant prose and would veto the WHOLE summary
+        (~29% of real turn summaries were lost this way). WHOLE-MESSAGE shapes
+        (CODE_FENCE ^-anchored = pure code block; PATH_ONLY / file-listing /
+        path-list) and empty / system-reminder / boilerplate / dedup ALWAYS apply.
+        Tool paths call with the default prose=False, unchanged.
+        """
         if not content:
             return "empty content"
-        # Code blocks and system reminders are pasted noise.
-        if CODE_FENCE_RE.search(content):
-            return "code-block content"
         if SYSTEM_REMINDER_RE.search(content):
             return "system-reminder content"
         # Boilerplate openers — but ONLY when the opener IS essentially the
@@ -1243,26 +1249,27 @@ class ContentRouter:
         stripped = content.strip()
         if NOISE_PREFIX_RE.match(stripped) and len(stripped) < self.summarize_threshold:
             return "boilerplate prefix"
-        # Pure file path dumps
+        # WHOLE-MESSAGE-shape patterns apply to prose too (a bare pasted code
+        # block or file path is not a summary).
+        if CODE_FENCE_RE.search(content):
+            return "code-block content"
         first_line = content.strip().splitlines()[0] if content.strip() else ""
         if PATH_ONLY_RE.match(first_line) and len(content.strip().splitlines()) <= 2:
             return "file-path-only content"
-        # Wave 2.5 tuning: file listings (`ls -la` output) — never speak.
         if FILE_LISTING_RE.search(content):
             return "file-listing content (ls -la)"
-        # Wave 2.5 tuning: URL/path-list dumps (route tables, etc.).
         if _looks_like_path_list(content):
             return "path-list content"
-        # Wave 2.5 tuning: git commit log lines (hex prefix or [branch hash]).
-        if GIT_COMMIT_LINE_RE.search(content):
-            return "git-commit-log content"
-        # HOTFIX 2026-05-05: git diff --stat / --shortstat noise.
-        if GIT_DIFF_STAT_RE.search(content):
-            return "git-diff-stat content"
-        # HOTFIX 2026-05-05: symbol runs (+++++, -----, etc.) — unspeakable.
-        if SYMBOL_RUN_RE.search(content):
-            return "symbol-run content (likely diff/banner)"
-        # Dedupe on normalized hash
+        # MID-CONTENT stdout patterns that false-positive on markdown in prose —
+        # skipped for prose, still applied to tool output.
+        if not prose:
+            if GIT_COMMIT_LINE_RE.search(content):
+                return "git-commit-log content"
+            if GIT_DIFF_STAT_RE.search(content):
+                return "git-diff-stat content"
+            if SYMBOL_RUN_RE.search(content):
+                return "symbol-run content (likely diff/banner)"
+        # Dedupe on normalized hash — ALWAYS (Stop hook re-sends identical text).
         h = _hash_content(content)
         if h in self._recent_hashes:
             return "duplicate of recent content"

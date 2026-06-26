@@ -3,14 +3,14 @@
   "owner": { "name": "chendrizzy", "url": "https://github.com/chendrizzy" },
   "metadata": {
     "description": "Speak Claude Code progress aloud — local TTS daemon with smart content routing, hooks, and graceful degradation.",
-    "version": "0.1.2"
+    "version": "0.1.3"
   },
   "plugins": [
     {
       "name": "claude-tts",
       "source": "./",
       "description": "Speak Claude Code progress aloud — local TTS daemon with smart content routing, hooks, and graceful degradation.",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": { "name": "chendrizzy", "url": "https://github.com/chendrizzy" },
       "keywords": ["tts", "text-to-speech", "claude-code"],
       "category": "accessibility"

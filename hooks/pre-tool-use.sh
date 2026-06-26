@@ -26,7 +26,10 @@
 #   - More substantive announcements: runner + target file basename or dir
 
 INPUT=$(cat)
-echo "$INPUT"
+# Cursor wrappers set CLAUDE_TTS_PASSTHROUGH=false so postToolUse stdout stays clean.
+if [[ "${CLAUDE_TTS_PASSTHROUGH:-true}" == "true" ]]; then
+    echo "$INPUT"
+fi
 
 TTS_ENABLED="${CLAUDE_TTS_ENABLED:-true}"
 [[ "$TTS_ENABLED" != "true" ]] && exit 0

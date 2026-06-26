@@ -6,6 +6,26 @@ All notable changes to claude-tts are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-25
+
+### Fixed
+- Turn summaries are no longer filtered as tool-output noise. The assistant's
+  end-of-turn summaries were run through the same regex ladder tuned for raw
+  command stdout, so ordinary markdown in prose (a `-----` rule, "N files
+  changed", a commit SHA) false-positived and silenced the whole summary. The
+  drop filter now has a `prose` mode (stop_events) that skips those mid-content
+  patterns while still dropping bare code blocks / file paths, duplicates, and
+  system reminders. Tool-output filtering is unchanged.
+
+### Added
+- Cursor-editor TTS integration: hooks (`cursor-pre-tool-use.sh`,
+  `cursor-post-tool-use.sh`, `cursor-after-agent-response.sh`) + a normalizer
+  (`cursor_normalize.py`) that map Cursor's hook events to the daemon, plus a
+  `CLAUDE_TTS_PASSTHROUGH` stdout gate in the Claude Code hooks (default on →
+  unchanged behavior). Note: the after-response hook uses GNU `timeout`
+  (preinstalled on Linux; on macOS install coreutils, e.g. `brew install
+  coreutils`) for its daemon dispatch.
+
 ## [0.1.2] — 2026-06-25
 
 ### Added

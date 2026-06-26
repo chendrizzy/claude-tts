@@ -31,6 +31,7 @@ verify:
 		tests/test_shadow_replay.py \
 		tests/test_text_utils.py \
 		tests/test_router_corpus.py \
+		tests/test_prose_drop.py \
 		tests/test_queue_manager.py \
 		tests/test_playback_cutoff.py \
 		tests/test_spoken_log.py \
