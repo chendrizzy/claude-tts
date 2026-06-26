@@ -32,6 +32,11 @@ All notable changes to claude-tts are documented here. Format follows
   aloud. Guards meaning-changing false positives: decades (`the 90s`, `2020s`),
   informal plurals (`100s of`), identifiers/`key=value` (`timeout_30s`), compound
   tokens (`3m24s`), and letter-glued percents (`100%CPU`). +11 corpus contracts.
+- `/tts:doctor` now surfaces the summarizer budget and **warns when
+  `inner_timeout_s` is too small for the `soft + slack` token budget at the
+  model's measured throughput** — a read-only check that catches a budget raised
+  past its timeout (or a host too slow for it) before it silently falls back to
+  the rule-based summary.
 
 ## [0.1.5] — 2026-06-25
 
