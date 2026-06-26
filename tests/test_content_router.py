@@ -916,3 +916,77 @@ def test_enriched_judge_does_not_bypass_gates() -> None:
     decision = asyncio.run(router.classify_event(event))
     assert decision.should_speak is False
     assert summarizer.calls == [], "judge fired on non-ambiguous content"
+
+
+# ---------------------------------------------------------------------------
+# Harness-noise strip + consecutive-tail guard (cwd-reset spam)
+# ---------------------------------------------------------------------------
+
+from daemon.content_router import _strip_harness_noise, _tail_hash  # noqa: E402
+
+
+def test_strip_harness_noise_removes_cwd_reset_line():
+    # Standalone boilerplate → emptied.
+    assert _strip_harness_noise(
+        "Shell cwd was reset to /home/user/project"
+    ).strip() == ""
+    # Riding on real output → only the boilerplate line goes.
+    out = _strip_harness_noise("real result line\nShell cwd was reset to /a/b/c")
+    assert "Shell cwd was reset" not in out
+    assert "real result line" in out
+    # Fast path: no marker → identical object, no regex cost.
+    s = "no marker here, just output"
+    assert _strip_harness_noise(s) is s
+
+
+def test_classify_tool_silences_pure_cwd_reset():
+    """A Bash result whose stdout is ONLY the harness cwd-reset line must be
+    silenced — it was being spoken (and repeated) before the strip."""
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
+    event = {
+        "phase": "post",
+        "tool_name": "Bash",
+        "session_id": "s1",
+        "tool_input": {"command": "cd /tmp && echo hi"},
+        "tool_response": {
+            "stdout": "Shell cwd was reset to /home/user/project"
+        },
+    }
+    decision = asyncio.run(router.classify_event(event))
+    assert decision.should_speak is False
+
+
+def test_consecutive_tail_guard_caps_at_two():
+    """Three utterances with differing preamble but an IDENTICAL last line: the
+    whole-content hash differs each time (so global dedupe misses them), but the
+    consecutive-tail guard must drop the 3rd+, and a different line resets it."""
+    router = ContentRouter(config={}, provider=OllamaProvider(MockOllamaSummarizer()))
+    a = "alpha details one\nstable trailing line"
+    b = "beta details two\nstable trailing line"
+    c = "gamma details three\nstable trailing line"
+
+    assert _tail_hash(a) == _tail_hash(b) == _tail_hash(c)  # same tail
+    assert _hash_content_differs(a, b, c)                   # but full content differs
+
+    # 1st and 2nd: spoken (≤2 allowed in a row).
+    assert router._drop_check(a) is None
+    router._note_hash(a, "s")
+    assert router._drop_check(b) is None
+    router._note_hash(b, "s")
+    # 3rd consecutive same-tail: dropped.
+    assert router._drop_check(c) == "repeated trailing line >2x consecutively"
+
+    # A different last line in between resets the run.
+    d = "delta\ndifferent trailing line"
+    assert router._drop_check(d) is None
+    router._note_hash(d, "s")
+    # Now the stable-tail line may be spoken again (run was broken). Use a fresh
+    # preamble so the global hash-dedupe doesn't fire on already-noted content.
+    e = "epsilon details four\nstable trailing line"
+    assert router._drop_check(e) is None
+
+
+def _hash_content_differs(*texts) -> bool:
+    from daemon.content_router import _hash_content
+    hashes = {_hash_content(t) for t in texts}
+    return len(hashes) == len(texts)

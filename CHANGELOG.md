@@ -21,6 +21,14 @@ All notable changes to claude-tts are documented here. Format follows
   recently active agent", so two Claude Code sessions running from different
   directories **mirrored each other's spoken output** on the statusline. The
   pivot is removed; the statusline now shows only the current session's own log.
+- Harness boilerplate is no longer spoken or repeated. Claude Code appends a
+  `Shell cwd was reset to <path>` line to a Bash result when the command ran from
+  a different cwd; it rode in on the varying *tail* of stdout, so whole-content
+  dedupe missed it and it was spoken several times in a row. It's now stripped at
+  the single stdout/stderr chokepoint before classification. A general
+  **consecutive-tail guard** also caps utterances that share an identical last
+  line at 2 in a row (a different line in between resets it), catching any
+  stable-trailing-line noise that whole-content dedupe can't.
 
 ### Changed
 - Sub-agent *following* on the statusline is deferred until spoken-log entries

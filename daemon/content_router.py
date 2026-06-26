@@ -321,6 +321,32 @@ def _hash_content(text: str) -> str:
     return hashlib.md5(norm.encode("utf-8")).hexdigest()[:12]
 
 
+def _tail_hash(text: str) -> str:
+    """Hash of the LAST non-empty line — for the consecutive-tail guard.
+
+    Whole-content dedupe (`_hash_content`) keys on the full text, so a stable
+    trailing line riding on otherwise-varying output slips through. This lets us
+    detect "same last line, different preamble" repeats."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return _hash_content(lines[-1]) if lines else ""
+
+
+# Harness boilerplate: Claude Code appends "Shell cwd was reset to <path>" to a
+# Bash tool result whenever the command ran from a cwd that differs from the
+# session cwd. It carries zero spoken value, but it rode in on the *tail* of
+# otherwise-varying stdout, so whole-content dedupe never caught the repeats.
+_HARNESS_NOISE_RE = re.compile(r"^[ \t]*Shell cwd was reset to\b.*$", re.MULTILINE)
+
+
+def _strip_harness_noise(text: str) -> str:
+    """Remove harness boilerplate lines (e.g. 'Shell cwd was reset to …') so no
+    classification path (extractor / judge tail / summarizer) can speak them.
+    Fast-pathed: returns the input untouched when the marker isn't present."""
+    if not text or "Shell cwd was reset to" not in text:
+        return text
+    return _HARNESS_NOISE_RE.sub("", text)
+
+
 def _now() -> float:
     return time.time()
 
@@ -388,6 +414,15 @@ class ContentRouter:
 
         # Recent-hash dedupe — bounded deque, accepts benign concurrency races.
         self._recent_hashes: deque[str] = deque(maxlen=RECENT_HASH_LIMIT)
+
+        # Consecutive-tail guard: cap utterances that share an identical LAST
+        # line at 2 in a row, dropping the 3rd+. Whole-content dedupe above keys
+        # on the full text, so a stable trailing line on otherwise-varying output
+        # slips through; this catches that class without blocking a line that
+        # legitimately recurs later (a different line in between resets it).
+        # Read in _drop_check; advanced only on the speak path in _note_hash.
+        self._last_tail_hash: str = ""
+        self._consecutive_tail_count: int = 0
 
         # Per-session recently-spoken window (R-context): a small bounded deque
         # per session, mirroring _recent_hashes but scoped so the LLM judge can
@@ -631,8 +666,11 @@ class ContentRouter:
         if not isinstance(response, dict):
             return self._silence(event, reason="tool_response is not a dict")
 
-        stdout = (response.get("stdout") or "").strip()
-        stderr = (response.get("stderr") or "").strip()
+        # Strip harness boilerplate ("Shell cwd was reset to …") at the single
+        # chokepoint where tool stdout/stderr enters classification, so it can
+        # never become spoken content on its own or as a trailing line.
+        stdout = _strip_harness_noise(response.get("stdout") or "").strip()
+        stderr = _strip_harness_noise(response.get("stderr") or "").strip()
         interrupted = bool(response.get("interrupted"))
 
         # ----- ERROR detection (priority 1) -----
@@ -1273,6 +1311,11 @@ class ContentRouter:
         h = _hash_content(content)
         if h in self._recent_hashes:
             return "duplicate of recent content"
+        # Consecutive-tail guard: drop the 3rd+ utterance in a row that shares an
+        # identical last line (the whole-content hash above misses these when the
+        # preamble varies). Read-only; the count advances in _note_hash.
+        if self._consecutive_tail_count >= 2 and _tail_hash(content) == self._last_tail_hash:
+            return "repeated trailing line >2x consecutively"
         return None
 
     def _note_hash(
@@ -1281,6 +1324,14 @@ class ContentRouter:
         if not content:
             return
         self._recent_hashes.append(_hash_content(content))
+        # Advance the consecutive-tail counter (read in _drop_check). Same last
+        # line as the previous spoken item → increment; a different one resets.
+        th = _tail_hash(content)
+        if th and th == self._last_tail_hash:
+            self._consecutive_tail_count += 1
+        else:
+            self._last_tail_hash = th
+            self._consecutive_tail_count = 1
         # Per-session recently-spoken window (R-context). Keyed by recency_key
         # when provided (so the ambiguous branch can record the FULL stdout it
         # checked against), else by the spoken content itself. Lazily created so
