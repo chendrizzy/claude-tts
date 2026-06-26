@@ -6,6 +6,27 @@ All notable changes to claude-tts are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-25
+
+### Added
+- Sub-agent following is back, now **cwd-scoped** (the safe version of the
+  feature deferred in v0.1.4). Each spoken-log entry records the project dir
+  (cwd) it was spoken in; the daemon learns a session's cwd from its hook events
+  (`spoken_log.note_session_cwd`) and `append` stamps it. `read_merged()` and the
+  `/tts:log` merge now only fold in sibling-agent lines whose cwd matches this
+  session's, and the statusline `subagent_aware` pivot does the same. Sub-agents
+  and background agents inherit their parent's cwd, so they surface; an unrelated
+  concurrent session in another directory never does — which is what made the old
+  "follow the newest file" pivot mirror two sessions together. Entries that
+  predate the cwd field fall back to the old time-only behavior. `read_merged()`
+  also accepts an explicit `cwd=` so a caller (e.g. `/tts:log`) can pass its own
+  `os.getcwd()`. +3 tests in `tests/test_spoken_log.py`.
+
+### Changed
+- `statusline.subagent_aware` / `active_window_s` / `include_subagent_in_main`
+  are no longer "inert/deferred" (v0.1.4) — they are active and cwd-scoped. Docs
+  (README, `docs/CONFIGURATION.md`) updated accordingly.
+
 ## [0.1.4] — 2026-06-25
 
 ### Fixed

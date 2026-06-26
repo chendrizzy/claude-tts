@@ -900,6 +900,20 @@ class TTSDaemon:
             # Any client sending 'speak' now receives the default Unknown command
             # error response.  The new pipeline uses 'tool_event'/'stop_event'.
 
+            # Record the session's cwd (project dir) from the inbound event so
+            # spoken_log.append can stamp each entry, enabling cwd-scoped
+            # sub-agent following in read_merged() + the statusline (sub-agents
+            # inherit the parent's cwd; an unrelated session has a different one).
+            # Best-effort — never let it break event handling.
+            if command in ('tool_event', 'stop_event') and isinstance(request_data, dict):
+                try:
+                    from daemon import spoken_log as _spoken_log
+                    _spoken_log.note_session_cwd(
+                        request_data.get('session_id') or '', request_data.get('cwd')
+                    )
+                except Exception:
+                    pass
+
             if command == 'tool_event':
                 # Wave 2 W2.A: route tool_event payloads through ContentRouter.
                 # OBSERVE-03: schema validation BEFORE dispatch — malformed

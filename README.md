@@ -160,11 +160,10 @@ a count, or `--session <id>` to target one session).
 **Sub-agents and background agents** each get their own `session_id` from Claude
 Code, so each writes its own spoken-log file. With
 `statusline.include_subagent_in_main` enabled, `/tts:log` (no `--session`) merges
-sibling-agent lines that overlap this session's time span, each tagged by source.
-Caveat: the merge is purely by time-overlap — spoken-log entries don't yet carry a
-cwd/project tag, so an *unrelated* session running concurrently from another
-directory can be folded in too. Leave it `false` (the default) if you run multiple
-projects at once; cwd-scoped merging is the planned follow-up.
+sibling-agent lines that overlap this session's time span **and ran in the same
+project (cwd)**, each tagged by source. Sub-agents and background agents inherit
+their parent's cwd, so they fold in; an *unrelated* session running concurrently
+from another directory is excluded (each spoken-log entry now records its cwd).
 
 **Statusline 🔊 segment.** The repo ships the spoken-log *data* plus a
 `statusline` config block — but **not** the rendering wrapper that draws the 🔊
@@ -177,14 +176,16 @@ always logs raw per-session truth; they only change what the statusline and
 
 | Key | Default | Effect |
 |-----|---------|--------|
-| `statusline.subagent_aware` | `true` | **reserved / currently inert.** Intended to let the statusline follow whichever agent spoke most recently, but spoken-log entries carry no cwd tag yet, so following the newest *file* would surface unrelated concurrent sessions. Until cwd-tagging lands, treat the statusline contract as **strictly session-scoped**. |
-| `statusline.active_window_s` | `90` | recency window (seconds) for the sub-agent-following above; **no effect while `subagent_aware` is inert**. |
-| `statusline.include_subagent_in_main` | `false` | merge sibling-agent lines into `/tts:log`'s default view — **by time-overlap across _all_ sessions** (no cwd scoping yet), so it can pull in unrelated concurrent sessions. |
+| `statusline.subagent_aware` | `true` | let the statusline follow whichever agent spoke most recently **in the same project (cwd)** — a live sub-agent / background-agent surfaces (marked 🔊⤷). Scoped by cwd, so an unrelated concurrent session in another directory is never followed. `false` → strictly this session's own output. |
+| `statusline.active_window_s` | `90` | how recently (seconds) a same-cwd agent must have spoken for the line to pivot to it. |
+| `statusline.include_subagent_in_main` | `false` | merge sibling-agent lines into `/tts:log`'s default view — **same-cwd siblings only**, so it's safe to enable even with multiple projects open. |
 
-> **Note (v0.1.4):** sub-agent-*following* on the statusline is deferred until
-> spoken-log entries record a cwd/project tag. The shipped behavior is strictly
-> session-scoped; `subagent_aware`/`active_window_s` are placeholders for the
-> cwd-scoped follow-up and do not pivot the line today.
+> **Note (v0.1.5):** sub-agent *following* is **cwd-scoped**. Each spoken-log
+> entry records the project dir it was spoken in; sub-agents and background
+> agents inherit their parent's cwd, so they're followed/merged, while an
+> unrelated session in another directory never is. (The 🔊 segment itself is
+> drawn by your own statusline wrapper — see above — which reads the persisted
+> `cwd` to scope the pivot.)
 
 **Low disk no longer mutes silently.** Before each synthesis write, the daemon
 checks free space against a fixed internal threshold (~200 MB, not config-tunable);

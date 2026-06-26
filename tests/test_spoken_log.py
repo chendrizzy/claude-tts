@@ -95,3 +95,51 @@ def test_read_merged_empty_main_uses_default_window(tmp_path, monkeypatch):
     sl.append("ancient-sib", session_id="other", ts=1.0)
     merged = sl.read_merged("s1", limit=10, now=1_010.0, default_window_s=100.0)
     assert [r["text"] for r in merged] == ["recent-sib"]
+
+
+# --- cwd-scoped sub-agent following (the "proper fix": same-project only) ---
+
+def test_append_stamps_cwd_from_session_map(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(sl, "_SESSION_CWD", {})
+    sl.note_session_cwd("s1", "/proj/alpha")
+    sl.append("hello", session_id="s1")
+    rec = sl.read_recent("s1", limit=1)[0]
+    assert rec["cwd"] == "/proj/alpha"
+    # A session with no recorded cwd writes no cwd field (graceful/legacy).
+    sl.append("plain", session_id="s2")
+    assert "cwd" not in sl.read_recent("s2", limit=1)[0]
+
+
+def test_read_merged_scopes_siblings_to_same_cwd(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(sl, "_SESSION_CWD", {})
+    # main session + a sub-agent share /proj/alpha; an unrelated session is in
+    # /proj/beta. All three speak inside the main session's time window.
+    sl.note_session_cwd("s1", "/proj/alpha")
+    sl.note_session_cwd("subA", "/proj/alpha")
+    sl.note_session_cwd("intruder", "/proj/beta")
+    sl.append("m-early", session_id="s1", ts=100.0)
+    sl.append("m-late", session_id="s1", ts=200.0)
+    sl.append("sub-during", session_id="subA", ts=150.0)
+    sl.append("intruder-line", session_id="intruder", ts=160.0)  # in-window, wrong cwd
+    merged = sl.read_merged("s1", limit=10, now=210.0)
+    texts = [r["text"] for r in merged]
+    assert "sub-during" in texts        # same project → folded in
+    assert "intruder-line" not in texts  # different project → excluded (the fix)
+    assert texts == ["m-late", "sub-during", "m-early"]
+
+
+def test_read_merged_explicit_cwd_param_overrides(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    monkeypatch.setattr(sl, "_SESSION_CWD", {})
+    # Main session logged no cwd (e.g. /tts:log run for a session that predates
+    # the field); the caller passes its own os.getcwd() to scope the merge.
+    sl.append("m", session_id="s1", ts=100.0)
+    sl.note_session_cwd("sibA", "/proj/alpha")
+    sl.note_session_cwd("sibB", "/proj/beta")
+    sl.append("a", session_id="sibA", ts=150.0)
+    sl.append("b", session_id="sibB", ts=150.0)
+    merged = sl.read_merged("s1", limit=10, now=210.0, cwd="/proj/alpha")
+    texts = [r["text"] for r in merged]
+    assert "a" in texts and "b" not in texts  # explicit cwd scopes to alpha

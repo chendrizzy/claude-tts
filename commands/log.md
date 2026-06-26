@@ -93,6 +93,13 @@ if not f:
 if include_subagent_flag() and not explicit_session:
     main = [dict(r, session="main") for r in read_all(f)]
     lower = min((r.get("ts", 0) for r in main), default=0)
+    # Same-project gate (matches daemon/spoken_log.read_merged): only fold in
+    # siblings whose entries share this session's cwd. Sub-agents inherit the
+    # parent's cwd; an unrelated concurrent session has a different one — without
+    # this gate two sessions in different dirs would mirror each other. Derive
+    # cwd from this session's newest entry that recorded one; None → legacy
+    # time-only merge (entries predating the cwd field).
+    cur_cwd = next((r.get("cwd") for r in reversed(main) if r.get("cwd")), None)
     recs = list(main)
     anchor = os.path.abspath(f)
     for sib in glob.glob(os.path.join(DIR, "*.jsonl")):
@@ -100,8 +107,11 @@ if include_subagent_flag() and not explicit_session:
             continue
         tag = os.path.basename(sib)[:-6][:8]
         for r in read_all(sib):
-            if r.get("ts", 0) >= lower:
-                recs.append(dict(r, session=tag))
+            if r.get("ts", 0) < lower:
+                continue
+            if cur_cwd is not None and r.get("cwd") != cur_cwd:
+                continue  # different project — exclude (the cross-session fix)
+            recs.append(dict(r, session=tag))
     recs.sort(key=lambda r: r.get("ts", 0), reverse=True)
     shown = recs[:n]
     if not shown:
