@@ -43,7 +43,9 @@ works, rule-based. See [ARCHITECTURE.md](ARCHITECTURE.md#no-llm-floor).
 | Key | Default | Notes |
 |-----|---------|-------|
 | `model` | `qwen2.5-coder:1.5b` | any Ollama model; setup-time calibration checks it |
-| `inner_timeout_s` | `3.5` | **hard cap on one summarize call** — the binding budget |
+| `soft_tokens` | `200` | soft output-token target for a summary. `num_predict` (the hard cutoff) = `soft_tokens + slack_tokens`; since it's a *ceiling* not a target, short summaries stop early and pay no extra latency |
+| `slack_tokens` | `96` | cushion the model may run over `soft_tokens` by, so it can **finish its last sentence** instead of being cut mid-clause before the hard cutoff |
+| `inner_timeout_s` | `5.0` | **hard cap on one summarize call** — the binding budget, sized so a full `soft+slack` generation completes instead of timing out into the rule-based fallback |
 | `keep_alive` | `30m` | how long Ollama keeps the model resident |
 | `warm_interval_s` | `120` | background keep-warm ping interval |
 

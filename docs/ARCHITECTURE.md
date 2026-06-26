@@ -143,9 +143,12 @@ bridged to the threaded daemon by `adapter.py`:
   becomes speech: `daemon/text_utils.py::normalize_for_speech` strips fences,
   unwraps emphasis (while guarding `2**8`, `snake_case`, shell pipes), drops
   hashes/UUIDs/ANSI/ISO-timestamps, maps operators (`!=`→"not equal"), humanizes
-  file paths, and restores contractions for natural prosody. Then it chunks for
-  streaming synthesis. This pass is idempotent — running it twice changes
-  nothing — which is what the `make verify` gate asserts.
+  file paths, and restores contractions for natural prosody. After the
+  speakability gate it expands numbers + units for speech (`~1.1s` → "about 1.1
+  seconds", `24.0%` → "24.0 percent") — done *after* the gate so a pure numeric
+  dump is still dropped, not read aloud. Then it chunks for streaming synthesis.
+  This pass is idempotent — running it twice changes nothing — which is what the
+  `make verify` gate asserts.
 - **Generate** (`generate_stage.py`) — cache-backed, per-session-parallel
   synthesis via the chosen engine; yields ordered `AudioSegment`s. A
   just-in-time **disk guard** (`_ensure_disk_space`) gates each synthesis *write*
