@@ -64,3 +64,34 @@ def test_read_latest_uses_most_recent_session(tmp_path, monkeypatch):
     sl.append("hello", session_id="solo")
     assert sl.latest_session_file().stem == "solo"
     assert [r["text"] for r in sl.read_latest()] == ["hello"]
+
+
+# --- read_merged: sub-agent-aware /tts:log view (statusline.include_subagent_in_main) ---
+
+def test_read_merged_folds_in_time_overlapping_siblings(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    sl.append("m-early", session_id="s1", ts=100.0)
+    sl.append("m-late", session_id="s1", ts=200.0)
+    sl.append("sub-during", session_id="subA", ts=150.0)
+    sl.append("sub-before", session_id="subA", ts=50.0)
+    merged = sl.read_merged("s1", limit=10, now=210.0)
+    assert [r["text"] for r in merged] == ["m-late", "sub-during", "m-early"]
+    by_text = {r["text"]: r for r in merged}
+    assert by_text["m-late"]["session"] == "main"
+    assert by_text["sub-during"]["session"] == "subA"
+
+
+def test_read_merged_without_siblings_matches_single_file(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    sl.append("only", session_id="s1", ts=1.0)
+    merged = sl.read_merged("s1", limit=10, now=2.0)
+    assert [r["text"] for r in merged] == ["only"]
+    assert merged[0]["session"] == "main"
+
+
+def test_read_merged_empty_main_uses_default_window(tmp_path, monkeypatch):
+    _isolate(tmp_path, monkeypatch)
+    sl.append("recent-sib", session_id="other", ts=1_000.0)
+    sl.append("ancient-sib", session_id="other", ts=1.0)
+    merged = sl.read_merged("s1", limit=10, now=1_010.0, default_window_s=100.0)
+    assert [r["text"] for r in merged] == ["recent-sib"]

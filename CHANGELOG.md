@@ -6,6 +6,27 @@ All notable changes to claude-tts are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-25
+
+### Added
+- Sub-agent / background-agent-aware spoken log. Each sub-agent and background
+  agent already gets its own `session_id` from Claude Code, so the per-session
+  spoken-log file already separates them. New `spoken_log.read_merged()` folds
+  time-overlapping sibling-agent lines into one view, and two view-only config
+  flags in the new `statusline` block control it: `subagent_aware` (the
+  statusline segment follows whichever agent spoke most recently) and
+  `include_subagent_in_main` (`/tts:log` merges sub-agent lines into the main
+  view). No daemon changes — purely a display choice.
+- Disk guard: `GenerateStage` now checks free space before each synthesis write
+  (`min_free_bytes`, 200 MB default). When the cache volume is nearly full it
+  evicts aggressively and, if still low, refuses to synthesize and fires a loud
+  alert (desktop notification + statusline warning) instead of silently muting
+  — fixing the recurring disk-full mute where every engine appears to fail.
+
+### Changed
+- CI now runs an informational (non-blocking) async test suite so async pipeline
+  regressions are visible, not just the sync `make verify` gate.
+
 ## [0.1.1] — 2026-06-25
 
 ### Added

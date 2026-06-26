@@ -77,13 +77,13 @@ def read_recent(session_id: str, limit: int = 20) -> list[dict]:
     return _read_file(session_path(session_id), limit)
 
 
-def _read_file(p: Path, limit: int) -> list[dict]:
+def _read_all(p: Path) -> list[dict]:
+    """All records in a session file, in FILE ORDER (oldest first). [] on error."""
     try:
         if not p.exists():
             return []
-        lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
         out: list[dict] = []
-        for ln in reversed(lines):
+        for ln in p.read_text(encoding="utf-8", errors="ignore").splitlines():
             ln = ln.strip()
             if not ln:
                 continue
@@ -91,11 +91,13 @@ def _read_file(p: Path, limit: int) -> list[dict]:
                 out.append(json.loads(ln))
             except Exception:
                 continue
-            if len(out) >= limit:
-                break
         return out
     except Exception:
         return []
+
+
+def _read_file(p: Path, limit: int) -> list[dict]:
+    return list(reversed(_read_all(p)))[:limit]
 
 
 def latest_session_file() -> Optional[Path]:
@@ -114,3 +116,41 @@ def read_latest(limit: int = 20) -> list[dict]:
     """Most recent utterances from the most-recently-active session, newest first."""
     p = latest_session_file()
     return _read_file(p, limit) if p is not None else []
+
+
+def read_merged(
+    session_id: str,
+    *,
+    limit: int = 25,
+    now: Optional[float] = None,
+    default_window_s: float = 14_400.0,
+) -> list[dict]:
+    """Merge this session's spoken entries with entries from OTHER session files
+    that overlap this session's time span. Backs the /tts:log "sub-agent aware"
+    view (config ``statusline.include_subagent_in_main``). Newest-first, capped
+    at ``limit``. Each record gets a ``session`` tag: ``"main"`` for the current
+    session, else the source file's short stem.
+
+    "belonging" is inferred by time overlap, not a real parent link — Claude Code
+    gives sub-agents/background-agents independent session_ids with NO parent
+    pointer at the hook layer, so a concurrent unrelated top-level session that
+    overlaps this one's window can be folded in. Acceptable for a read-only view.
+    Degrades to the single-file view on any error.
+    """
+    try:
+        cur = session_path(session_id)
+        cur_stem = _safe_session(session_id)
+        merged = [{**r, "session": "main"} for r in _read_all(cur)]
+        ref = now if now is not None else time.time()
+        lower = min((r.get("ts", ref) for r in merged), default=ref - default_window_s)
+        for f in SPOKEN_DIR.glob("*.jsonl"):
+            if f.stem == cur_stem:
+                continue
+            tag = f.stem[:8]
+            for r in _read_all(f):
+                if r.get("ts", 0) >= lower:
+                    merged.append({**r, "session": tag})
+        merged.sort(key=lambda r: r.get("ts", 0), reverse=True)
+        return merged[:limit]
+    except Exception:
+        return _read_file(session_path(session_id), limit)

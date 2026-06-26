@@ -27,7 +27,27 @@ jobs:
       - name: Binding quality gate (make verify)
         run: uv run make verify
 
-# The full async suite (make verify-all) is intentionally NOT in the blocking
-# path for Phase 1: it needs pytest-asyncio and (optionally) a live Ollama/socket.
-# The deterministic `make verify` gate is the binding definition of "done".
-# On ubuntu, one test self-skips (the real macOS say+afinfo integration test).
+  async-suite:
+    # P1: run the async pipeline/playback/queue tests in CI so async regressions
+    # (e.g. the long-utterance playback cutoff) are visible — not just the sync
+    # gate. NON-BLOCKING for now: some async tests need a live Ollama/socket that
+    # CI lacks, so this is informational. Promotion path: mark live-dep tests with
+    # a `live` marker and `-m "not live"` here, then drop continue-on-error.
+    name: async suite (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv + Python 3.12
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --extra edge --extra dev
+      - name: Async suite (pytest-asyncio, auto mode)
+        run: uv run pytest -o asyncio_mode=auto -q tests
+
+# The deterministic `make verify` gate (job: verify) is the binding definition of
+# "done". The async-suite job above is informational until live-dep tests are
+# marked and deselected. On ubuntu, one test self-skips (the macOS say+afinfo
+# integration test).

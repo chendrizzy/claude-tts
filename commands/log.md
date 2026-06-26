@@ -32,32 +32,84 @@ if [ -n "$SESSION" ]; then
 else
   F=$(ls -t "$DIR"/*.jsonl 2>/dev/null | head -1)
 fi
-python3 - "$F" "$N" <<'PY'
-import sys, json, time
+python3 - "$F" "$N" "$SESSION" <<'PY'
+# Mirrors daemon/spoken_log.read_merged (the tested reference) — kept inline so
+# the command stays self-contained as an installed plugin.
+import sys, json, time, os, glob
+
 f = sys.argv[1] if len(sys.argv) > 1 else ""
 try:
     n = int(sys.argv[2])
 except Exception:
     n = 25
+explicit_session = bool(sys.argv[3].strip()) if len(sys.argv) > 3 else False
+DIR = os.path.expanduser("~/.claude/logs/tts/spoken")
+
+def read_all(path):
+    out = []
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as fh:
+            for ln in fh:
+                ln = ln.strip()
+                if ln:
+                    try: out.append(json.loads(ln))
+                    except Exception: pass
+    except OSError:
+        pass
+    return out
+
+def include_subagent_flag():
+    cands = []
+    if os.environ.get("CLAUDE_TTS_CONFIG"):
+        cands.append(os.environ["CLAUDE_TTS_CONFIG"])
+    cands.append(os.path.expanduser("~/.claude/tts/config/config.json"))
+    cands.append(os.path.join(os.getcwd(), "config.json"))
+    for c in cands:
+        try:
+            with open(c, encoding="utf-8") as fh:
+                sl = (json.load(fh) or {}).get("statusline", {})
+            return bool(sl.get("include_subagent_in_main", False))
+        except Exception:
+            continue
+    return False
+
 if not f:
     print("(no spoken output logged yet — speak something, then try again)")
     raise SystemExit
-try:
-    lines = open(f, encoding="utf-8", errors="ignore").read().splitlines()
-except OSError:
-    print("(no spoken output logged yet)"); raise SystemExit
-shown = [ln for ln in lines if ln.strip()][-n:]
-if not shown:
-    print("(no spoken output logged yet)"); raise SystemExit
-import os
-print(f"# spoken log — {os.path.basename(f)}  ({len(shown)} of {len(lines)} entries)")
-for ln in reversed(shown):  # newest first
-    try:
-        r = json.loads(ln)
-    except Exception:
-        continue
-    ts = time.strftime("%H:%M:%S", time.localtime(r.get("ts", 0)))
-    cat = r.get("category") or "-"
-    print(f"{ts}  [{cat:>12}]  {r.get('text','')}")
+
+# include_subagent_in_main: merge sibling-agent lines spoken during this
+# (anchor) session's span. Only when no explicit --session was requested.
+if include_subagent_flag() and not explicit_session:
+    main = [dict(r, session="main") for r in read_all(f)]
+    lower = min((r.get("ts", 0) for r in main), default=0)
+    recs = list(main)
+    anchor = os.path.abspath(f)
+    for sib in glob.glob(os.path.join(DIR, "*.jsonl")):
+        if os.path.abspath(sib) == anchor:
+            continue
+        tag = os.path.basename(sib)[:-6][:8]
+        for r in read_all(sib):
+            if r.get("ts", 0) >= lower:
+                recs.append(dict(r, session=tag))
+    recs.sort(key=lambda r: r.get("ts", 0), reverse=True)
+    shown = recs[:n]
+    if not shown:
+        print("(no spoken output logged yet)"); raise SystemExit
+    print(f"# spoken log — MERGED (sub-agent aware)  ({len(shown)} of {len(recs)} entries)")
+    for r in shown:
+        ts = time.strftime("%H:%M:%S", time.localtime(r.get("ts", 0)))
+        cat = r.get("category") or "-"
+        src = r.get("session", "-")
+        print(f"{ts}  [{src:>8}]  [{cat:>12}]  {r.get('text','')}")
+else:
+    lines = read_all(f)
+    shown = lines[-n:]
+    if not shown:
+        print("(no spoken output logged yet)"); raise SystemExit
+    print(f"# spoken log — {os.path.basename(f)}  ({len(shown)} of {len(lines)} entries)")
+    for r in reversed(shown):  # newest first
+        ts = time.strftime("%H:%M:%S", time.localtime(r.get("ts", 0)))
+        cat = r.get("category") or "-"
+        print(f"{ts}  [{cat:>12}]  {r.get('text','')}")
 PY
 ```

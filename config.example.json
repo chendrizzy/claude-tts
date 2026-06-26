@@ -51,6 +51,15 @@
     "summarize_timeout_s": 4.0,
     "binary_judge_timeout_s": 2.5
   },
+  "statusline": {
+    "_comment": "Spoken-output statusline segment (rendered by a wrapper that composes your base statusline with a claude-tts segment). VIEW-ONLY: the daemon always logs raw per-session truth; these flags only change what the statusline + /tts:log SHOW. Sub-agents/background-agents get their own session_id from Claude Code (each already has its own spoken log), so 'agent-aware' is purely a display choice.",
+    "subagent_aware": true,
+    "_subagent_aware_desc": "true = the statusline line follows whichever agent context spoke most recently, so a running sub-agent's / background-agent's output surfaces live. false = strictly this session's own spoken output.",
+    "active_window_s": 90,
+    "_active_window_s_desc": "How recently (seconds) another agent must have spoken for the subagent_aware line to pivot to it.",
+    "include_subagent_in_main": false,
+    "_include_subagent_in_main_desc": "true = /tts:log (no --session) merges sub-agent/background-agent lines spoken during this session's time span into one view, each tagged by source. false = only this session's own lines."
+  },
   "audio": {
     "global_lock": true,
     "_description": "Prevents audio overlap across multiple Claude sessions.",
