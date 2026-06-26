@@ -37,7 +37,20 @@ import platform
 
 
 # Configuration Constants
-OLLAMA_API_BASE = "http://localhost:11434"
+def _ollama_api_base() -> str:
+    """Resolve the Ollama endpoint, honoring the standard ``OLLAMA_HOST`` env
+    var (the same one the Ollama CLI/server use). Accepts a full URL
+    (``http://host:port``) or a bare ``host[:port]`` (scheme assumed http).
+    Unset → local default. Read at import; set it before the daemon starts."""
+    raw = os.environ.get("OLLAMA_HOST", "").strip()
+    if not raw:
+        return "http://localhost:11434"
+    if "://" not in raw:
+        raw = "http://" + raw
+    return raw.rstrip("/")
+
+
+OLLAMA_API_BASE = _ollama_api_base()
 OLLAMA_INSTALL_PATH = Path.home() / ".ollama"
 OLLAMA_CONFIG_PATH = Path.home() / ".claude" / "ollama_config.json"
 OLLAMA_METRICS_PATH = Path.home() / ".claude" / "ollama_metrics.json"

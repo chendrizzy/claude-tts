@@ -166,3 +166,27 @@ def test_factory_openai():
     cfg = {"llm_provider": {"type": "openai", "base_url": "http://x/v1", "model": "m", "api_key": "k"}}
     p = make_provider(cfg, None)
     assert isinstance(p, OpenAICompatProvider)
+
+
+# --- OLLAMA_HOST env var resolution (daemon/ollama_integration._ollama_api_base) ---
+
+import os
+from daemon.ollama_integration import _ollama_api_base
+
+
+def test_ollama_host_env_resolution(monkeypatch):
+    # Unset → local default.
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    assert _ollama_api_base() == "http://localhost:11434"
+    # Full URL → used as-is (trailing slash trimmed).
+    monkeypatch.setenv("OLLAMA_HOST", "http://10.0.0.5:11434/")
+    assert _ollama_api_base() == "http://10.0.0.5:11434"
+    # Bare host:port → http:// assumed (Ollama's own convention).
+    monkeypatch.setenv("OLLAMA_HOST", "10.0.0.5:11434")
+    assert _ollama_api_base() == "http://10.0.0.5:11434"
+    # https honored.
+    monkeypatch.setenv("OLLAMA_HOST", "https://ollama.example.com")
+    assert _ollama_api_base() == "https://ollama.example.com"
+    # Blank → default.
+    monkeypatch.setenv("OLLAMA_HOST", "  ")
+    assert _ollama_api_base() == "http://localhost:11434"

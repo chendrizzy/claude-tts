@@ -21,6 +21,18 @@ All notable changes to claude-tts are documented here. Format follows
   predate the cwd field fall back to the old time-only behavior. `read_merged()`
   also accepts an explicit `cwd=` so a caller (e.g. `/tts:log`) can pass its own
   `os.getcwd()`. +3 tests in `tests/test_spoken_log.py`.
+- `OLLAMA_HOST` environment variable is now honored for the Ollama endpoint (the
+  same var the Ollama CLI/server use). Accepts a full URL or a bare `host:port`
+  (scheme assumed `http://`); unset → `http://localhost:11434`. Read at daemon
+  start. +1 test.
+
+### Fixed
+- Documentation accuracy (caught by an automated doc-vs-code audit):
+  `docs/CONFIGURATION.md` dropped a stale `CLAUDE_TTS_LAUNCHD_LABEL` env-var row
+  that was never implemented (the launchd label is the fixed
+  `com.claude-tts.daemon`); `commands/voice.md` referenced `voice.voice` but the
+  daemon reads `voice.name`, so `/tts:voice` now edits the field that actually
+  takes effect.
 
 ### Changed
 - `statusline.subagent_aware` / `active_window_s` / `include_subagent_in_main`
