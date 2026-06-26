@@ -10,7 +10,9 @@ exactly one remediation.
 Checks:
 
 1. **Disk** — free space on the volume holding the audio temp directory. WARN if
-   low; a full disk silently mutes every engine (audio can't be written).
+   low; below ~200 MB free the daemon's disk guard evicts cache, refuses to
+   synthesize, and fires a loud desktop + statusline alert (it no longer
+   silently mutes).
 2. **Daemon process + socket** — is the daemon process alive AND is the socket bound
    at `${CLAUDE_TTS_SOCKET:-${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock}`? WARN if the
    process is up but the socket is missing (a stale/orphaned daemon), with a restart

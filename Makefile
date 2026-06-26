@@ -39,6 +39,7 @@ verify:
 		tests/test_voicebox_client.py \
 		tests/test_cache_cleanup.py \
 		tests/test_disk_guard.py \
+		tests/test_summarizer_echo.py \
 		tests/test_llm_provider.py \
 		tests/test_tts_engines.py \
 		tests/test_platform.py \

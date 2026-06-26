@@ -12,6 +12,12 @@ category. Reads the per-session JSONL the daemon appends at
 Optional argument: how many entries to show (default 25). Pass a session id with
 `--session <id>` to target a specific session instead of the most-recently-active.
 
+When `statusline.include_subagent_in_main` is enabled in `config.json` and no
+`--session` is given, the log shows a MERGED, sub-agent-aware view: lines spoken
+by sibling sub-agents / background agents during this session's span are folded
+in, each tagged by source (`spoken_log.read_merged()`). Default is off — the
+plain single-session view.
+
 Run:
 
 ```bash
@@ -62,7 +68,12 @@ def include_subagent_flag():
     cands = []
     if os.environ.get("CLAUDE_TTS_CONFIG"):
         cands.append(os.environ["CLAUDE_TTS_CONFIG"])
-    cands.append(os.path.expanduser("~/.claude/tts/config/config.json"))
+    # Canonical config location — matches daemon/paths.py config_path(), honoring
+    # XDG_CONFIG_HOME (else ~/.config/claude-tts/config.json). Checked FIRST so the
+    # include_subagent_in_main flag is actually read for a standard install.
+    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    cands.append(os.path.join(xdg, "claude-tts", "config.json"))
+    cands.append(os.path.expanduser("~/.claude/tts/config/config.json"))  # legacy fallback
     cands.append(os.path.join(os.getcwd(), "config.json"))
     for c in cands:
         try:

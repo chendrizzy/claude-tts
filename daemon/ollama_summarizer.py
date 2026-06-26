@@ -87,6 +87,38 @@ _BATCH_PROMPT_TEMPLATE = (
 )
 
 
+# Prompt-echo guard. Tiny instruction-tuned models (e.g. qwen2.5-coder:1.5b)
+# sometimes ECHO the summarize prompt's rule lines instead of summarizing — and
+# that echo would be spoken verbatim ("No 'Here's', no preamble. First person,
+# never 'we'…"). These signatures appear ONLY in the instructions, never in a
+# real summary of tool output. Quote-variant- and paraphrase-tolerant.
+_PROMPT_ECHO_SIGNATURES = (
+    re.compile(r"\bno preamble\b", re.I),
+    re.compile(r"\bfirst person\b", re.I),
+    re.compile(r"never\s+['\"]?we['\"]?", re.I),
+    re.compile(r"\bno\s+['\"]?here\s*(?:is|'?s)\b", re.I),
+    re.compile(r"the output shows", re.I),
+    re.compile(r"name the object", re.I),
+    re.compile(r"three sentences", re.I),
+    re.compile(r"understated tone", re.I),
+    re.compile(r"preserve every contraction", re.I),
+    re.compile(r"speak the substance", re.I),
+    re.compile(r"you are f\.?r\.?i\.?d\.?a\.?y", re.I),
+    re.compile(r"^\s*category\s*:", re.I | re.M),
+    re.compile(r"^\s*context\s*:", re.I | re.M),
+    re.compile(r"^\s*content\s*:", re.I | re.M),
+)
+
+
+def _looks_like_prompt_echo(text: str) -> bool:
+    """True if the model echoed the summarize prompt instead of producing a
+    summary. Requires >=2 distinct instruction-only signatures so a legitimate
+    summary (which never contains this scaffolding) is never mistaken for one."""
+    if not text:
+        return False
+    return sum(1 for rx in _PROMPT_ECHO_SIGNATURES if rx.search(text)) >= 2
+
+
 # Rule-based fallback constants
 _FALLBACK_MAX_CHARS = 200
 _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -340,6 +372,13 @@ class OllamaSummarizer:
         cleaned = raw.strip()
         if not cleaned:
             self._log_warning("Ollama returned empty string; using fallback")
+            return None
+
+        # The model echoed the prompt instructions instead of summarizing —
+        # speaking that would read the rule block aloud. Treat as a failure so
+        # the caller falls back to the deterministic rule-based summary.
+        if _looks_like_prompt_echo(cleaned):
+            self._log_warning("Ollama echoed the summarize prompt; using fallback")
             return None
 
         # Record latency only on success.

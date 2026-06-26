@@ -1,7 +1,7 @@
 {
   "name": "claude-tts",
   "description": "Speak Claude Code progress aloud — local TTS daemon with smart content routing, hooks, and graceful degradation.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": { "name": "chendrizzy", "url": "https://github.com/chendrizzy" },
   "license": "MIT",
   "keywords": ["tts", "text-to-speech", "claude-code", "hooks", "accessibility"]

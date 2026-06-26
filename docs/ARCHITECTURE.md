@@ -26,6 +26,15 @@ event as JSON and writes one line to the daemon's unix socket. The daemon
 pipeline to your speakers. If the daemon isn't running, the hook fails silently:
 no daemon, no noise, no broken builds.
 
+**Cursor** drives the same daemon: `hooks/cursor-pre-tool-use.sh`,
+`cursor-post-tool-use.sh`, and `cursor-after-agent-response.sh` map Cursor's
+`preToolUse` / `postToolUse` / `afterAgentResponse` events — normalized by
+`cursor_normalize.py` — onto the Claude Code hooks, delegating with
+`CLAUDE_TTS_PASSTHROUGH=false` so the wrapped hooks keep stdout clean for Cursor.
+The wiring is manual (the `cursor-*.sh` are *not* registered in
+`hooks/hooks.json`); `CLAUDE_TTS_PYTHON` overrides the interpreter, and the macOS
+after-response hook needs GNU `timeout` (`brew install coreutils`).
+
 ## The filter brain — `daemon/content_router.py`
 
 The router is a regex/heuristic ladder with one governing invariant: **the
@@ -48,6 +57,12 @@ Classification is mostly a sequence of cheap, ordered checks (`_classify_tool`,
    before any trimming, so multi-line shapes are visible: fenced code,
    `system-reminder` tags, `ls -la` listings, `grep -n` output, `git status`/
    `diff --stat` noise, symbol runs (`+++++`), and a recent-content dedupe window.
+   Assistant turn-summaries (`stop_event`) run this in **prose mode**
+   (`_drop_check(…, prose=True)`): the mid-content stdout vetoes (symbol runs,
+   git-diff-stat, git-commit-line) are skipped because they false-positive on
+   ordinary markdown, while whole-message shapes (a bare code block or file
+   path), `system-reminder`, boilerplate, and dedupe still drop. Tool-output
+   filtering is unchanged.
 3. **Per-tool extractors** — Bash/Grep/Glob/Task/WebFetch each distill a signal
    (`23 passed, 4 failed.`, a match count, a subagent's last sentence, a page
    title) and name *what* produced it for the summarizer's context.
@@ -132,10 +147,25 @@ bridged to the threaded daemon by `adapter.py`:
   streaming synthesis. This pass is idempotent — running it twice changes
   nothing — which is what the `make verify` gate asserts.
 - **Generate** (`generate_stage.py`) — cache-backed, per-session-parallel
-  synthesis via the chosen engine; yields ordered `AudioSegment`s.
+  synthesis via the chosen engine; yields ordered `AudioSegment`s. A
+  just-in-time **disk guard** (`_ensure_disk_space`) gates each synthesis *write*
+  on ~200 MB of free headroom (a fixed internal threshold, not config-tunable):
+  below it, the stage evicts the cache and — if still low — refuses to synthesize
+  and fires a desktop notification (`osascript`/`notify-send`) plus a `disk_full`
+  spoken-log entry, instead of silently muting when the write fails on a full
+  volume. Any guard error fails open (synthesize anyway), so it can't itself be
+  the reason TTS stops.
 - **Playback** (`playback_stage.py`) — serial per session, with a cross-session
   lock so two Claude windows don't talk over each other, plus a watchdog that
-  kills a hung player.
+  kills a hung player. Each played segment is appended — best-effort, never
+  raising into the playback path — to a bounded per-session JSONL at
+  `~/.claude/logs/tts/spoken/<session>.jsonl` via `daemon/spoken_log.py`. This
+  **spoken-output log** backs the `/tts:log` command (newest-first, with
+  timestamps + category) and the statusline segment; sub-agents and
+  background-agents get their own `session_id` (hence their own log file), which
+  `read_merged()` can fold together by time overlap (config `statusline.*`). The
+  statusline renderer itself is an external wrapper — this repo ships the log and
+  its config block, not the segment.
 
 ### Backpressure — `daemon/pipeline/queue_manager.py`
 

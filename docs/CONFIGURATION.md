@@ -58,6 +58,31 @@ it would cancel summarization and read the **raw markdown** aloud. The code
 enforces `wrapper > inner` regardless of what you set here, so this is one knob
 you can't misconfigure into a regression.
 
+### `statusline` — what the spoken-output statusline + `/tts:log` *show* (view-only)
+| Key | Default | Notes |
+|-----|---------|-------|
+| `subagent_aware` | `true` | **reserved / currently inert.** Intended to pivot the statusline to whichever agent context spoke most recently. Spoken-log entries carry no cwd/project tag yet, so "follow the newest file" would surface *unrelated* concurrent sessions — until cwd-tagging lands, the statusline contract is **strictly session-scoped** and this key does not pivot the line |
+| `active_window_s` | `90` | recency window (seconds) for the `subagent_aware` pivot above; **no effect while `subagent_aware` is inert** |
+| `include_subagent_in_main` | `false` | `true` → `/tts:log` (no `--session`) merges sibling lines that overlap this session's time span, each tagged by source. Caveat: the merge is **by time-overlap across _all_ sessions** (no cwd scoping yet), so a concurrent session from another directory can be folded in — keep `false` when running multiple projects at once |
+
+These flags are **view-only** — the daemon always logs raw per-session truth
+(`daemon/spoken_log.py` writes a bounded per-session JSONL under
+`~/.claude/logs/tts/spoken/<session>.jsonl`); they only change what the
+statusline and `/tts:log` display. Each agent (including sub-agents /
+background-agents) gets its own `session_id`, hence its own spoken-log file. The
+🔊 statusline **segment** is rendered by an external wrapper that composes your
+base statusline with a claude-tts segment and is **not shipped in this repo** —
+the repo ships only this config block plus the spoken-log data it reads.
+
+> **Sub-agent following is deferred (v0.1.4).** A prior build let the statusline
+> pivot to the most-recently-active agent by picking the newest spoken-log file
+> in the whole directory. Because entries don't record a cwd, two sessions in
+> different directories mirrored each other's output, so the pivot was removed and
+> the statusline is now strictly session-scoped. `subagent_aware` / `active_window_s`
+> are kept as forward-compatible placeholders; they return to active duty once
+> spoken-log entries carry a cwd tag and the merge/pivot can be scoped to the same
+> project.
+
 ### `filtering` — what reaches the router at all
 | Key | Default | Notes |
 |-----|---------|-------|
@@ -128,6 +153,22 @@ To relocate the socket, set `CLAUDE_TTS_SOCKET` — that is the source of truth.
 The `advanced.socket_path` field above is retained for compatibility and is
 superseded by this resolution; setting the env var is the supported path.
 
+## Disk guard
+
+A just-in-time disk guard (`daemon/pipeline/generate_stage.py`,
+`_ensure_disk_space()` / `_signal_disk_full()`) runs before every synthesis
+write. If free space on the cache volume is below ~200 MB it first evicts cache
+(5-minute age) and re-checks; if still low it refuses to synthesize that chunk
+and fires a desktop notification (`osascript` on macOS, `notify-send` on Linux)
+plus a `disk_full` spoken-log entry — alerting you instead of silently muting
+when the write would later fail on a full volume. The notification needs no disk
+write, so it fires even at ~0 bytes free; the alert is throttled to at most once
+per minute.
+
+This ~200 MB floor is a **fixed internal threshold** (`MIN_FREE_BYTES_DEFAULT`,
+also a `min_free_bytes` constructor arg) — it is **not** exposed in
+`config.example.json` and is not config-tunable.
+
 ## Environment variables
 
 None are required; none are secrets. See [`.env.example`](../.env.example).
@@ -137,6 +178,7 @@ None are required; none are secrets. See [`.env.example`](../.env.example).
 | `CLAUDE_TTS_CONFIG` | full path to `config.json` | `~/.config/claude-tts/config.json` |
 | `CLAUDE_TTS_SOCKET` | daemon socket path | `${XDG_RUNTIME_DIR:-/tmp}/claude-tts.sock` |
 | `CLAUDE_TTS_ENABLED` | global on/off | `true` |
+| `CLAUDE_TTS_PASSTHROUGH` | hook stdout passthrough (`hooks/pre-tool-use.sh`, `post-tool-use.sh`); Cursor wrappers set `false` to keep stdout clean | `true` |
 | `CLAUDE_TTS_RATE` | speech rate delta | `+20%` |
 | `CLAUDE_TTS_PITCH` | pitch shift | `+3Hz` |
 | `CLAUDE_TTS_VOICE_STYLE` | edge-tts style | `expressive` |

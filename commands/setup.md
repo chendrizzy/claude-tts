@@ -23,3 +23,25 @@ failed and the single most likely remediation, then stop.
 Note: the full bootstrap and calibration logic lives in the tts-setup skill. If the
 skill reports it is a stub, tell the user setup automation is not yet available in
 this build and point them at `/tts:doctor` to check current health.
+
+Optional post-setup integrations (not part of the automated skill flow):
+
+- Cursor editor. To drive TTS from Cursor too, manually wire the three
+  `cursor-*.sh` hooks (`cursor-pre-tool-use.sh`, `cursor-post-tool-use.sh`,
+  `cursor-after-agent-response.sh`) into Cursor's hook config — they are *not*
+  registered in `hooks/hooks.json`, so Claude Code never loads them. They map
+  Cursor's `preToolUse`/`postToolUse`/`afterAgentResponse` events onto the
+  Claude Code hooks with `CLAUDE_TTS_PASSTHROUGH=false` (the gate defaults to
+  `true`; setting it false keeps Cursor's stdout clean). On macOS the
+  after-response hook uses GNU `timeout` — `brew install coreutils`. Knobs:
+  `CLAUDE_TTS_ENABLED`, `CLAUDE_TTS_PYTHON`, `CLAUDE_TTS_PASSTHROUGH`. See the
+  Cursor section of the README for the full steps.
+
+- 🔊 statusline segment. Everything spoken is logged to a bounded per-session
+  JSONL (`~/.claude/logs/tts/spoken/<session>.jsonl`), readable with `/tts:log`;
+  sub-agents and background-agents each get their own session file. The
+  `statusline` config block (`subagent_aware`, `active_window_s`,
+  `include_subagent_in_main`) is VIEW-ONLY — it tunes what that view shows, not
+  what the daemon logs. The repo ships the config block and the spoken log; the
+  wrapper that renders the live 🔊 segment in your statusline is a
+  personal/global file and is *not* shipped here.

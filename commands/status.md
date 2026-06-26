@@ -15,7 +15,9 @@ Report:
    model from `~/.config/claude-tts/config.json`. If the config is missing, say so
    and suggest `/tts:setup`.
 3. **Recent log tail** — show the last ~15 lines of the daemon log so the user can
-   see recent speech activity or errors.
+   see recent speech activity or errors. For exactly what was spoken (newest
+   first, with category), point the user at `/tts:log`, which reads the
+   per-session spoken-output log at `~/.claude/logs/tts/spoken/<session>.jsonl`.
 
 Keep the output compact and skimmable. For anything failing, point the user at
 `/tts:doctor` for a full diagnosis with remediations.

@@ -1,6 +1,6 @@
 [project]
 name = "claude-tts"
-version = "0.1.3"
+version = "0.1.4"
 description = "A filtered, spoken stream of a Claude Code agent's output — judge + summarize via a local LLM, synthesize via a TTS engine, driven by Claude Code hooks."
 readme = "README.md"
 requires-python = ">=3.11"

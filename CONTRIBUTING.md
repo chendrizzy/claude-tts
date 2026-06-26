@@ -26,7 +26,11 @@ uv run make verify     # must be green before you open a PR
 ```
 
 The broader async suite (`uv run pytest tests/`) needs the `dev` extra for
-`pytest-asyncio`; those tests cover the daemon's async pipeline.
+`pytest-asyncio`; those tests cover the daemon's async pipeline. CI also runs
+this suite as an informational, non-blocking `async-suite` job
+(`.github/workflows/test.yml`: `continue-on-error`, `pytest -o
+asyncio_mode=auto` on ubuntu / py3.12) — it stays advisory until the live-dep
+tests (Ollama/socket) are marked and deselected.
 
 ## Test layout
 
@@ -48,6 +52,18 @@ the ecosystem).
 Engine drivers live in `daemon/pipeline/` (`kokoro_engine.py`,
 `voicebox_client.py`, the lazy edge path in `generate_stage.py`). Keep optional
 dependencies lazy-imported so a missing engine never breaks daemon startup.
+
+## Adding a host/editor integration
+
+The daemon is host-agnostic — anything that can shape an event into the
+Claude Code hook JSON can drive it. The Cursor wiring is the reference example
+and a contributable surface: `hooks/cursor-pre-tool-use.sh`,
+`cursor-post-tool-use.sh`, and `cursor-after-agent-response.sh` normalize
+Cursor's `preToolUse` / `postToolUse` / `afterAgentResponse` events via
+`hooks/cursor_normalize.py`, then delegate to the Claude Code hooks with
+`CLAUDE_TTS_PASSTHROUGH=false` (keeps the host's stdout clean). These wrappers
+are **not** registered in `hooks/hooks.json` — editor wiring is manual. A new
+host follows the same shape: normalize → delegate.
 
 ## Pull requests
 

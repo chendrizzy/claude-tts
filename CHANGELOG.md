@@ -6,6 +6,33 @@ All notable changes to claude-tts are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-06-25
+
+### Fixed
+- The summarizer no longer speaks its own prompt aloud. The tiny summarizer
+  model (`qwen2.5-coder:1.5b`) would occasionally echo the SUMMARIZE rule block
+  instead of summarizing ("No 'Here's', no preamble. First person, never 'we'…"),
+  and that echo was spoken verbatim. `_call_ollama` now runs an instruction-echo
+  detector (`_looks_like_prompt_echo`, ≥2 instruction-only signatures) on the
+  model output and falls back to the deterministic rule-based summary on a hit.
+  Pure string logic, gated by `tests/test_summarizer_echo.py`.
+- Statusline spoken-log is now strictly session-scoped. The previous behavior
+  picked the newest spoken-log file in the whole directory to "follow the most
+  recently active agent", so two Claude Code sessions running from different
+  directories **mirrored each other's spoken output** on the statusline. The
+  pivot is removed; the statusline now shows only the current session's own log.
+
+### Changed
+- Sub-agent *following* on the statusline is deferred until spoken-log entries
+  record a cwd/project tag (without it, "follow the newest agent" is
+  indistinguishable from "follow an unrelated concurrent session"). The
+  `statusline.subagent_aware` / `active_window_s` keys are kept as
+  forward-compatible placeholders but are **currently inert**;
+  `include_subagent_in_main` still merges by time-overlap across *all* sessions
+  and should stay `false` when running multiple projects at once. Docs (README,
+  `docs/CONFIGURATION.md`) updated to describe the shipped session-scoped
+  behavior accurately.
+
 ## [0.1.3] — 2026-06-25
 
 ### Fixed

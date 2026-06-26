@@ -62,7 +62,11 @@ Claude Code hooks ──▶ unix socket ──▶ daemon
 ```
 
 The filter brain decides **what** to surface and **how** to phrase it. Synthesis
-and playback are swappable behind three seams. For the full picture — the
+and playback are swappable behind three seams. The assistant's end-of-turn answer
+is classified as **prose**, so ordinary markdown in it (a symbol run, a
+diff-stat- or commit-shaped line) doesn't trip the stdout-noise patterns that gate
+raw tool output and would otherwise veto the whole summary; whole-message shapes,
+dedup, and `system-reminder` blocks still drop. For the full picture — the
 classification ladder, backpressure tiers, error pre-emption, the markdown→speech
 chokepoint — see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -121,6 +125,7 @@ engine additionally needs an `mlx-audio` interpreter pointed to by `$MLX_PYTHON`
 |---------|--------------|
 | `/tts:setup` | First-run setup: engine, LLM backend, calibration, service, config |
 | `/tts:status` | Daemon socket, active engine + model, recent log tail (read-only) |
+| `/tts:log` | Replay what the daemon has actually spoken — newest first, with timestamps + category (read-only) |
 | `/tts:doctor` | Disk, daemon/socket, deps, backend reachability — PASS/WARN + fixes |
 | `/tts:voice` | Pick a speech engine and voice, then restart to apply |
 | `/tts:uninstall` | Stop and remove the service/daemon (optionally the config) |
@@ -144,6 +149,98 @@ and edit. Every block is optional; the daemon embeds safe defaults. Common knobs
 `filtering.max_response_length`. Full reference, defaults, and environment
 variables: **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
+## Spoken-output log & statusline
+
+Every utterance the daemon speaks is appended to a bounded, per-session JSONL at
+`~/.claude/logs/tts/spoken/<session>.jsonl` (`daemon/spoken_log.py`, capped at the
+most recent 500 lines). It's best-effort — a logging failure never silences
+speech. **`/tts:log`** prints it newest-first with timestamps and category (pass
+a count, or `--session <id>` to target one session).
+
+**Sub-agents and background agents** each get their own `session_id` from Claude
+Code, so each writes its own spoken-log file. With
+`statusline.include_subagent_in_main` enabled, `/tts:log` (no `--session`) merges
+sibling-agent lines that overlap this session's time span, each tagged by source.
+Caveat: the merge is purely by time-overlap — spoken-log entries don't yet carry a
+cwd/project tag, so an *unrelated* session running concurrently from another
+directory can be folded in too. Leave it `false` (the default) if you run multiple
+projects at once; cwd-scoped merging is the planned follow-up.
+
+**Statusline 🔊 segment.** The repo ships the spoken-log *data* plus a
+`statusline` config block — but **not** the rendering wrapper that draws the 🔊
+segment (that's a personal/global statusline file, outside this repo). To compose
+your own, read the latest line with `spoken_log.read_latest()` (or tail the
+JSONL) and append it to your existing statusline. The config keys (in
+[`config.example.json`](config.example.json)) are **view-only** — the daemon
+always logs raw per-session truth; they only change what the statusline and
+`/tts:log` *show*:
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `statusline.subagent_aware` | `true` | **reserved / currently inert.** Intended to let the statusline follow whichever agent spoke most recently, but spoken-log entries carry no cwd tag yet, so following the newest *file* would surface unrelated concurrent sessions. Until cwd-tagging lands, treat the statusline contract as **strictly session-scoped**. |
+| `statusline.active_window_s` | `90` | recency window (seconds) for the sub-agent-following above; **no effect while `subagent_aware` is inert**. |
+| `statusline.include_subagent_in_main` | `false` | merge sibling-agent lines into `/tts:log`'s default view — **by time-overlap across _all_ sessions** (no cwd scoping yet), so it can pull in unrelated concurrent sessions. |
+
+> **Note (v0.1.4):** sub-agent-*following* on the statusline is deferred until
+> spoken-log entries record a cwd/project tag. The shipped behavior is strictly
+> session-scoped; `subagent_aware`/`active_window_s` are placeholders for the
+> cwd-scoped follow-up and do not pivot the line today.
+
+**Low disk no longer mutes silently.** Before each synthesis write, the daemon
+checks free space against a fixed internal threshold (~200 MB, not config-tunable);
+below it, it evicts cache and — if still low — refuses to synthesize and fires a
+*loud* alert: a desktop notification (`osascript` / `notify-send`) plus a
+`disk_full` spoken-log entry that surfaces on the statusline, instead of failing
+the write quietly.
+
+## Cursor (editor) support
+
+claude-tts can also speak for [Cursor](https://cursor.com)'s agent. The repo
+ships wrapper hooks that translate Cursor's agent-hook events into the same
+daemon the Claude Code hooks drive:
+
+| Cursor hook event | Wrapper script |
+|-------------------|----------------|
+| `preToolUse` | `hooks/cursor-pre-tool-use.sh` |
+| `postToolUse` | `hooks/cursor-post-tool-use.sh` |
+| `afterAgentResponse` | `hooks/cursor-after-agent-response.sh` |
+
+`hooks/cursor_normalize.py` maps Cursor's field names (`conversation_id` →
+`session_id`, `tool_output` → `tool_response`, `Shell` → `Bash`, …) into the
+Claude Code hook shape; each wrapper then delegates to the matching Claude Code
+hook with `CLAUDE_TTS_PASSTHROUGH=false`, so Cursor's tool stdout stays clean
+(that gate in `hooks/pre-tool-use.sh` / `post-tool-use.sh` defaults to `true` for
+Claude Code, which chains hooks on stdout).
+
+These wrappers are **not** registered in `hooks/hooks.json` — Cursor wiring is
+manual. Point Cursor's hook config at the absolute path of each wrapper, in
+`<project>/.cursor/hooks.json` (one project) or `~/.cursor/hooks.json` (all
+projects):
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [{ "command": "/abs/path/to/claude-tts/hooks/cursor-pre-tool-use.sh" }],
+    "postToolUse": [{ "command": "/abs/path/to/claude-tts/hooks/cursor-post-tool-use.sh" }],
+    "afterAgentResponse": [{ "command": "/abs/path/to/claude-tts/hooks/cursor-after-agent-response.sh" }]
+  }
+}
+```
+
+- **macOS:** the after-response wrapper uses GNU `timeout` — install it with
+  `brew install coreutils`.
+- **Python:** `PYTHON_BIN` defaults to a macOS framework `python3`; override it
+  with `CLAUDE_TTS_PYTHON`, and it falls back to `command -v python3`.
+
+Environment variables read by the wrappers:
+
+| Var | Default | Effect |
+|-----|---------|--------|
+| `CLAUDE_TTS_ENABLED` | `true` | set to anything else to mute the wrappers |
+| `CLAUDE_TTS_PYTHON` | framework `python3` | interpreter used for normalization + dispatch |
+| `CLAUDE_TTS_PASSTHROUGH` | `true` (wrappers force `false`) | when `false`, the underlying hook does not echo stdin, keeping Cursor's tool stdout clean |
+
 ## Project layout
 
 ```
@@ -153,8 +250,9 @@ daemon/              the daemon — socket server, router, async pipeline, seams
   providers/           LLM seam: ollama · openai_compat · null
   engines/             TTS seam: edge-tts · system (say/espeak)
   platforms/           OS seam: launchd · systemd · audio players
-hooks/               Claude Code hook scripts + hooks.json registry
-commands/            slash commands (/tts:setup, status, doctor, voice, uninstall)
+  spoken_log.py        bounded per-session JSONL of what was actually spoken
+hooks/               Claude Code hook scripts + hooks.json registry (+ cursor-* wrappers)
+commands/            slash commands (/tts:setup, status, doctor, voice, log, uninstall)
 skills/tts-setup/    the first-run setup procedure
 scripts/             calibration, manifest sync, the demo generators
 tests/               the `make verify` gate + fixtures (spoken & event corpora)
@@ -171,6 +269,11 @@ leaking to speech, classification regressions, and path-humanization bugs.
 uv sync --extra edge --extra dev
 uv run make verify
 ```
+
+CI runs that same gate across macOS + Linux × Python 3.11–3.13; a separate,
+informational `async-suite` job (`continue-on-error`, Linux + Python 3.12)
+additionally exercises the async pipeline/playback/queue tests under
+`pytest-asyncio` so async regressions stay visible.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the test layout and how to add a
 provider or engine, and [docs/PUBLISH.md](docs/PUBLISH.md) for the release
