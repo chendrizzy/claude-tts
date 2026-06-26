@@ -99,6 +99,10 @@ def _assert_contract(case: dict, rendered: str, *, check_forbid_re: bool, label:
 def test_normalize_contract(case):
     if not _HAVE_NORMALIZE:
         pytest.fail("daemon.text_utils.normalize_for_speech does not exist yet (R1 not merged)")
+    if case.get("stage") == "pipeline":
+        pytest.skip("pipeline-only contract: number/unit expansion is applied by "
+                    "ProcessStage._clean_text_sync AFTER the is_speakable gate, "
+                    "not in the pure normalize_for_speech unit")
     rendered = normalize_for_speech(case["raw"])
     _assert_contract(case, rendered, check_forbid_re=True, label="normalize")
 

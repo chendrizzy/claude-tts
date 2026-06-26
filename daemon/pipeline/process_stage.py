@@ -231,7 +231,9 @@ class ProcessStage:
         # import ever fails, but normalize_for_speech is load-bearing for audio
         # quality, so this should effectively never fall back.
         try:
-            from daemon.text_utils import normalize_for_speech, humanize_paths, is_speakable
+            from daemon.text_utils import (
+                normalize_for_speech, humanize_paths, is_speakable, speak_numeric_units,
+            )
         except Exception:  # pragma: no cover
             def normalize_for_speech(text: str) -> str:  # type: ignore
                 return text or ""
@@ -241,6 +243,9 @@ class ProcessStage:
 
             def is_speakable(text: str) -> bool:  # type: ignore
                 return bool(text and text.strip())
+
+            def speak_numeric_units(text: str) -> str:  # type: ignore
+                return text or ""
 
         # 1. Markdown -> speech (fenced code dropped, inline code CONTENTS kept,
         #    all structural markup destructured). Idempotent.
@@ -268,6 +273,12 @@ class ProcessStage:
         # no chunks and no audio — the utterance is silently skipped.
         if not is_speakable(text):
             return ""
+
+        # 7. Numbers + units LAST — strictly AFTER the speakability gate, so
+        # expanding "5s"/"40%" into the words "seconds"/"percent" cannot upgrade
+        # a number-dominated dump past is_speakable (a pure timing/percent dump
+        # is correctly dropped, not spoken). "~1.1s" -> "about 1.1 seconds".
+        text = speak_numeric_units(text)
 
         return text
 

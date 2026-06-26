@@ -6,6 +6,33 @@ All notable changes to claude-tts are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-06-26
+
+### Fixed
+- Summaries no longer get cut off mid-sentence. The summarizer's output-token
+  budget moved from a flat 120 cap to a soft target (200) plus a slack cushion
+  (96) for a 296-token hard cutoff (`num_predict`), and the inner timeout was
+  raised 3.5→5.0s so a full-budget generation completes instead of timing out.
+  Because `num_predict` is a ceiling rather than a target, short summaries still
+  stop early and pay no extra latency. A completeness backstop trims any runaway
+  to its last full sentence (or falls back to the deterministic summary) rather
+  than speaking a dangling fragment, and the binary SPEAK/SKIP judge keeps its
+  own tiny 16-token budget. +10 tests in `tests/test_summarizer_echo.py`.
+- A chunk that fails synthesis no longer strands the rest of an utterance.
+  `GenerateStage.generate`'s ordered-yield loop now advances past a failed
+  (`None`) chunk and still plays the good tail, fixing a head-of-line stall where
+  the listener heard the head of a multi-sentence utterance and then silence.
+  New `tests/test_generate_ordering.py`.
+
+### Added
+- Number and unit expansion for natural speech: `~1.1s` → "about 1.1 seconds",
+  `150ms` → "150 milliseconds", `24.0%` → "24.0 percent" (singular `1s` → "1
+  second"). Applied as a final render step in `ProcessStage`, strictly **after**
+  the speakability gate, so a pure numeric dump is still dropped rather than read
+  aloud. Guards meaning-changing false positives: decades (`the 90s`, `2020s`),
+  informal plurals (`100s of`), identifiers/`key=value` (`timeout_30s`), compound
+  tokens (`3m24s`), and letter-glued percents (`100%CPU`). +11 corpus contracts.
+
 ## [0.1.5] — 2026-06-25
 
 ### Added

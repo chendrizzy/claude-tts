@@ -2326,9 +2326,11 @@ class TTSDaemon:
             self._ollama_summarizer = OllamaSummarizer(
                 self._ollama_client,
                 model=str(_summ_cfg.get("model", "qwen2.5-coder:1.5b")),
-                timeout_s=float(_summ_cfg.get("inner_timeout_s", 3.5)),
+                timeout_s=float(_summ_cfg.get("inner_timeout_s", 5.0)),
                 keep_alive=_summ_cfg.get("keep_alive", "30m"),
                 warm_interval_s=float(_summ_cfg.get("warm_interval_s", 120.0)),
+                soft_tokens=int(_summ_cfg.get("soft_tokens", 200)),
+                slack_tokens=int(_summ_cfg.get("slack_tokens", 96)),
             )
             self.log(
                 f"OllamaClient + OllamaSummarizer ready "

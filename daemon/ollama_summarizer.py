@@ -125,16 +125,67 @@ _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`]*`")
 # Sentence-end break: ., !, or ? followed by whitespace.
 _SENTENCE_BREAK_RE = re.compile(r"(?<=[.!?])\s+")
+# Terminal punctuation marking a COMPLETE utterance — a trailing closing
+# quote/paren/bracket after it still counts as complete.
+_SENTENCE_END_RE = re.compile(r"[.!?…][\"'\)\]”’]*$")
+_MIN_SENTENCE_CHARS = 40  # don't keep a sub-40-char stub (mirrors rule_based_summary)
+
+
+def _last_complete_sentence(text: str) -> str:
+    """Trim a spoken summary to its last COMPLETE sentence.
+
+    The Ollama summarizer caps generation at ``num_predict`` (_SUMMARIZE_HARD_TOKENS)
+    output tokens; when a summary would run longer the model is hard-stopped
+    mid-sentence and the partial text comes back with NO terminal punctuation.
+    Speaking that reads a dangling fragment aloud ("...so I'd", a half-built
+    markdown table). This enforces the invariant that a spoken summary ends at a
+    sentence boundary:
+
+    - already ends in . ! ? …            -> returned unchanged
+    - earlier complete sentence + tail   -> trimmed back to the last boundary
+    - no complete sentence (capped before the first boundary, e.g. token-dense
+      markdown) or only a <40-char stub  -> "" so the caller falls back to the
+      deterministic rule-based summary
+
+    Applied ONLY to the summary path (``allow_fallback=True``); the binary
+    SPEAK/SKIP judge returns a short token, not a sentence, and must not be
+    trimmed (that would silence the daemon).
+    """
+    t = (text or "").rstrip()
+    if not t or _SENTENCE_END_RE.search(t):
+        return t
+    last_end = -1
+    for m in _SENTENCE_BREAK_RE.finditer(t):
+        last_end = m.start()  # index of the whitespace right after . ! ?
+    if last_end < 0:
+        return ""
+    head = t[:last_end].rstrip()
+    return head if len(head) >= _MIN_SENTENCE_CHARS else ""
+
 
 # Latency tracking window (seconds).
 _LATENCY_WINDOW_S = 60.0
 
-# Ollama call tuning.
-# R2: lowered 250 -> 120. model latency scales with OUTPUT token count, not
-# input length; 250-token summaries took 2-3s (over the cap -> fallback). A TTS
-# summary is "three sentences max" per the prompt, so ~120 tokens is ample and
-# lands well under the inner cap, restoring real-summary completion.
-_SUMMARIZE_MAX_TOKENS = 120
+# Ollama output-token budget for a spoken summary.
+#
+# num_predict is a CEILING, not a target — the model emits end-of-text and stops
+# on its own well before the ceiling for normal summaries (measured: a "complex
+# finding" summary stops at ~108 tokens / 0.8s), so raising the ceiling costs
+# ZERO latency on short summaries and only spends tokens on genuinely long ones.
+# The budget is a SOFT target plus a SLACK cushion: the model may run up to
+# soft+slack (the HARD cutoff = num_predict) so it can FINISH its final sentence
+# rather than be cut mid-clause. The completeness backstop in summarize() only
+# engages if a generation is somehow STILL mid-sentence at the hard cutoff.
+#
+# History: R2 lowered a flat cap 250 -> 120 because a larger ~4.7GB model (~100 tok/s)
+# blew the timeout on 250-token summaries. The model has since moved to
+# qwen2.5-coder:1.5b at ~153 tok/s (measured), so soft+slack=296 tokens is ~1.9s
+# warm — comfortably under the raised ~5s inner timeout. These are config knobs
+# (summarizer.soft_tokens / slack_tokens); the constants are the embedded default.
+_SUMMARIZE_SOFT_TOKENS = 200       # soft target / raised baseline
+_SUMMARIZE_SLACK_TOKENS = 96       # cushion the model may run over soft by
+_SUMMARIZE_HARD_TOKENS = _SUMMARIZE_SOFT_TOKENS + _SUMMARIZE_SLACK_TOKENS  # num_predict
+_JUDGE_MAX_TOKENS = 16             # binary SPEAK/SKIP needs only a token or two
 _BATCH_MAX_TOKENS = 80
 _TEMPERATURE = 0.3  # Low for deterministic summaries.
 _WARMUP_MAX_TOKENS = 4
@@ -177,19 +228,25 @@ class OllamaSummarizer:
         self,
         ollama_client: "OllamaClient",
         model: str = "qwen2.5-coder:1.5b",
-        timeout_s: float = 3.5,
+        timeout_s: float = 5.0,
         keep_alive: object = "30m",
         warm_interval_s: float = 120.0,
+        soft_tokens: int = _SUMMARIZE_SOFT_TOKENS,
+        slack_tokens: int = _SUMMARIZE_SLACK_TOKENS,
     ) -> None:
         self._client = ollama_client
         self._model = model
-        # R2: inner cap raised 1.0s -> 3.5s AND _SUMMARIZE_MAX_TOKENS lowered
-        # 250 -> 120. Live model latency scales with OUTPUT tokens: a 250-token
-        # summary took 2-3s and blew the old caps; ~120 tokens lands ~1.5s, and
-        # 3.5s leaves margin for outliers. The outer wrappers
-        # (content_router._maybe_summarize, queue_manager._condense_or_fallback)
-        # are clamped to always exceed this so a slow call returns the
-        # markdown-clean fallback rather than raw content.
+        # Summary token budget: soft target + slack cushion = hard cutoff
+        # (num_predict). The model finishes naturally below this for normal
+        # summaries; the extra room lets a long one complete its final sentence
+        # instead of being cut mid-clause. inner_timeout raised to ~5s so a
+        # full-budget generation (soft+slack ~= 1.9s warm on qwen2.5-coder:1.5b)
+        # completes rather than timing out into the rule-based fallback. The
+        # outer wrappers (content_router._maybe_summarize,
+        # queue_manager._condense_or_fallback) are clamped to always exceed this.
+        self._soft_tokens = max(int(soft_tokens), 1)
+        self._slack_tokens = max(int(slack_tokens), 0)
+        self._hard_tokens = self._soft_tokens + self._slack_tokens
         self._timeout_s = timeout_s
         # keep_alive holds the model resident between bursts so the first call
         # after an idle gap doesn't pay cold-load latency; warm_interval_s is
@@ -225,10 +282,24 @@ class OllamaSummarizer:
             content=content,
         )
 
-        result = await self._call_ollama(prompt, max_tokens=_SUMMARIZE_MAX_TOKENS)
+        # The judge needs only a SPEAK/SKIP token; a summary gets the full
+        # soft+slack budget so the model can finish its thought.
+        max_toks = _JUDGE_MAX_TOKENS if not allow_fallback else self._hard_tokens
+        result = await self._call_ollama(prompt, max_tokens=max_toks)
         if result is None:
             return self._rule_based_fallback(content) if allow_fallback else None
-        return result
+        if not allow_fallback:
+            # Binary SPEAK/SKIP judge: `result` is a control token, not a
+            # sentence — return it untouched (trimming would nuke "SPEAK").
+            return result
+        # The soft+slack budget lets the model finish its sentence, so a complete
+        # summary is the norm. BACKSTOP only: if a true runaway is somehow still
+        # mid-sentence at the hard cutoff, salvage the last complete sentence (or
+        # fall back) rather than speak a dangling fragment ("...so I'd").
+        complete = _last_complete_sentence(result)
+        if not complete:
+            return self._rule_based_fallback(content)
+        return complete
 
     async def condense_batch(self, items: list[RoutedItem]) -> str:
         """Merge multiple same-category items into one utterance.

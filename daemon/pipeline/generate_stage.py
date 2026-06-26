@@ -216,23 +216,32 @@ class GenerateStage:
             self.generation_tasks[session_id] = []
         self.generation_tasks[session_id].extend(tasks)
 
-        # Yield segments in order as they complete
-        completed = {}
-        next_expected = 0
-
-        for coro in asyncio.as_completed(tasks):
+        # Yield segments IN ORDER as they complete. A chunk that fails synthesis
+        # resolves to None (or raises) — we must still advance next_expected PAST
+        # its index, otherwise one mid-utterance failure stalls head-of-line and
+        # strands every later chunk: the listener hears the head then silence (a
+        # clean-sentence-boundary truncation) and the tail is never logged.
+        # Index-tagged wrappers let us mark a failed chunk "done" and skip ONLY
+        # it, so the good tail still flows.
+        async def _indexed(idx, task):
             try:
-                segment = await coro
-                if segment:
-                    completed[segment.chunk_index] = segment
-
-                    # Yield in order
-                    while next_expected in completed:
-                        yield completed.pop(next_expected)
-                        next_expected += 1
+                return idx, await task
             except Exception as e:
                 logger.error(f"Generation task failed: {e}")
                 self._stats['generation_errors'] += 1
+                return idx, None
+
+        completed = {}  # chunk_index -> AudioSegment, or None for a failed chunk
+        next_expected = 0
+        for fut in asyncio.as_completed([_indexed(i, t) for i, t in enumerate(tasks)]):
+            idx, segment = await fut
+            completed[idx] = segment
+            # Drain the contiguous run: yield real segments, skip failed (None).
+            while next_expected in completed:
+                seg = completed.pop(next_expected)
+                next_expected += 1
+                if seg is not None:
+                    yield seg
 
     async def _ensure_disk_space(self, session_id: str) -> bool:
         """Just-in-time disk guard. True if there's room to synthesize a chunk.

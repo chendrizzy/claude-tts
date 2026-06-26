@@ -747,6 +747,68 @@ def speak_file_extensions(text: str) -> str:
     return _FILE_EXT_RE.sub(_repl, text)
 
 
+# Number + unit -> spoken words, and ~/≈ before a number -> "about". Runs after
+# the markup fixed point (units survive stripping) so "~1.1s" reads "about 1.1
+# seconds" instead of the engine voicing the bare "~" and "s". Digits are left
+# as-is (the engine reads "1.1" as "one point one"). Idempotent: the expanded
+# form has a SPACE before the word, so the no-space <num><unit> pattern can't
+# re-match.
+_APPROX_RE = re.compile(r"[~≈]\s*(?=\.?\d)")
+# Unit must ABUT the number and NOT follow a word-char or '=' — so prose,
+# identifiers (test_5s), key=value (timeout=5s), and the interior digits of
+# compound tokens (3m24s, 10s20s) are never touched. "ms" before "s" wins the
+# alternation. "%" additionally must not abut a FOLLOWING letter, else it glues
+# into an unspeakable word ("100%CPU" -> "percentCPU").
+_NUM_TIME_RE = re.compile(r"(?<![\w=])([0-9]+(?:\.[0-9]+)?)(ms|s)\b")
+# "%+" consumes a run so "100%%" (printf escape) -> "100 percent", not
+# "100 percent%"; the trailing lookahead also blocks a following digit or "%"
+# so we never glue onto a letter ("100%CPU") or orphan a second "%". ASCII
+# digits only ([0-9], not \d) so fullwidth/Arabic-Indic numerals aren't half-expanded.
+_NUM_PCT_RE = re.compile(r"(?<![\w=])([0-9]+(?:\.[0-9]+)?)%+(?![A-Za-z0-9%])")
+_TIME_UNIT_WORDS = {"ms": "milliseconds", "s": "seconds"}
+# A bare integer + "s" that is a DECADE or informal PLURAL, not a duration:
+# era context before a 2-digit number ("the 90s", "'90s"). 4-digit year-decades
+# ("2020s") and "<n>s of" plurals ("100s of") are handled inline below.
+_DECADE_PRE_RE = re.compile(r"(?:'|\b(?:the|early|late|mid)\s)$", re.I)
+
+
+def speak_numeric_units(text: str) -> str:
+    """Expand approximation marks and number+unit abbreviations for natural
+    speech: "~1.1s" -> "about 1.1 seconds", "150ms" -> "150 milliseconds",
+    "24.0%" -> "24.0 percent", "1s" -> "1 second". Pure + idempotent.
+
+    Only a unit ABUTTING a number is expanded (s, ms, %), and identifiers
+    (test_5s), key=value (timeout=5s), compound tokens (3m24s), versions
+    (v0.1.6), IPs, and letter-glued percents (100%CPU) are all left untouched.
+    The bare-integer seconds path also skips decades/plurals: 4-digit years
+    ("2020s"), "<n>s of" ("100s of errors"), and era-prefixed 2-digit decades
+    ("the 90s", "'90s"). Residual: a bare 2-digit "90s" with no era word before
+    it still reads as seconds (genuinely ambiguous). "m"/"h" are left alone
+    (minutes vs metres vs millions).
+    """
+    if not text:
+        return text or ""
+    text = _APPROX_RE.sub("about ", text)
+
+    def _time(m):
+        num, unit = m.group(1), m.group(2)
+        if unit == "s" and "." not in num:        # bare integer seconds: guard
+            if len(num) >= 4:                      # "2020s" year/decade, not a duration
+                return m.group(0)
+            if m.string[m.end():m.end() + 3].startswith(" of"):  # "100s of" plural
+                return m.group(0)
+            if len(num) == 2 and _DECADE_PRE_RE.search(m.string[:m.start()]):
+                return m.group(0)                  # "the 90s" / "'90s" decade
+        word = _TIME_UNIT_WORDS[unit]
+        if num == "1":
+            word = word[:-1]                       # singular: "1 second", "1 millisecond"
+        return f"{num} {word}"
+
+    text = _NUM_TIME_RE.sub(_time, text)
+    text = _NUM_PCT_RE.sub(r"\1 percent", text)
+    return text
+
+
 def normalize_for_speech(text: str) -> str:
     """Destructure markdown/markup to clean speech. Pure, idempotent, safe.
 
@@ -768,6 +830,10 @@ def normalize_for_speech(text: str) -> str:
     # after the markup fixed point and before any path humanization; idempotent
     # (the output contains no "name.ext" pair to re-match).
     result = speak_file_extensions(result)
+    # NOTE: number/unit expansion (speak_numeric_units) is deliberately NOT done
+    # here — it's a final render step applied by ProcessStage._clean_text_sync
+    # AFTER the is_speakable gate, so expanding "5s"/"40%" into words can't push
+    # a number-dump past the speakability filter.
     return result
 
 
