@@ -48,7 +48,6 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Set, Any, List, Tuple
-from dataclasses import dataclass, field, asdict
 from collections import deque, defaultdict
 from contextlib import contextmanager
 import fcntl  # For file locking on Unix systems
@@ -160,26 +159,6 @@ class ErrorCategory(Enum):
     SYSTEM = "system"
     VALIDATION = "validation"
 
-@dataclass
-class TTSRequest:
-    """Structured TTS request with enhanced tracking"""
-    source: str
-    content: str
-    session_id: str = ""
-    priority: int = 5
-    timestamp: float = field(default_factory=time.time)
-    context: str = ""
-    request_id: str = field(default_factory=lambda: hashlib.md5(str(time.time()).encode()).hexdigest()[:12])
-    retry_count: int = 0
-    max_retries: int = 3
-    timeout: float = REQUEST_TIMEOUT
-
-    def can_retry(self) -> bool:
-        return self.retry_count < self.max_retries
-
-    def increment_retry(self):
-        self.retry_count += 1
-
 class CircuitBreaker:
     """Circuit breaker pattern for failing components"""
     def __init__(self, failure_threshold: int = CIRCUIT_BREAKER_THRESHOLD,
@@ -190,33 +169,6 @@ class CircuitBreaker:
         self.last_failure_time = 0
         self.state = ComponentState.HEALTHY
         self.lock = threading.Lock()
-
-    def call(self, func, *args, **kwargs):
-        """Execute function with circuit breaker protection"""
-        with self.lock:
-            if self.state == ComponentState.BROKEN:
-                if time.time() - self.last_failure_time > self.timeout:
-                    self.state = ComponentState.DEGRADED
-                    self.failure_count = 0
-                else:
-                    raise Exception("Circuit breaker is OPEN")
-
-            try:
-                result = func(*args, **kwargs)
-                if self.state == ComponentState.DEGRADED:
-                    self.state = ComponentState.HEALTHY
-                self.failure_count = 0
-                return result
-            except Exception as e:
-                self.failure_count += 1
-                self.last_failure_time = time.time()
-
-                if self.failure_count >= self.failure_threshold:
-                    self.state = ComponentState.BROKEN
-                elif self.failure_count > self.failure_threshold // 2:
-                    self.state = ComponentState.DEGRADED
-
-                raise e
 
 class ResourceMonitor:
     """Resource usage monitoring and optimization"""
@@ -1726,201 +1678,6 @@ class TTSDaemon:
 
             return selected_voice
     
-    def is_duplicate(self, content: str) -> bool:
-        """Check if content was recently spoken"""
-        # Clean old hashes
-        current_time = time.time()
-        if current_time - self.hash_cleanup_time > self.hash_expiry:
-            self.recent_hashes.clear()
-            self.hash_cleanup_time = current_time
-        
-        # Check for duplicate
-        content_hash = hashlib.md5(content.lower().strip().encode()).hexdigest()[:12]
-        if content_hash in self.recent_hashes:
-            self.stats['duplicates_prevented'] += 1
-            return True
-        
-        self.recent_hashes[content_hash] = time.time()
-        return False
-    
-    def _restore_contractions_daemon(self, text: str) -> str:
-        """
-        Restore contractions for natural speech
-        Contracts expanded forms like "I am" → "I'm", "that is" → "that's"
-        """
-        # Defensive check for production robustness
-        if not text:
-            return text or ""
-
-        # Comprehensive contractions mapping for natural speech
-        # CRITICAL: This contracts expanded forms → natural contractions
-        standard_contractions = {
-            # Negative contractions (highest priority)
-            r"\bdo not\b": "don't",
-            r"\bdoes not\b": "doesn't",
-            r"\bdid not\b": "didn't",
-            r"\bwill not\b": "won't",
-            r"\bcannot\b": "can't",
-            r"\bcan not\b": "can't",
-            r"\bcould not\b": "couldn't",
-            r"\bshould not\b": "shouldn't",
-            r"\bwould not\b": "wouldn't",
-            r"\bis not\b": "isn't",
-            r"\bare not\b": "aren't",
-            r"\bwas not\b": "wasn't",
-            r"\bwere not\b": "weren't",
-            r"\bhas not\b": "hasn't",
-            r"\bhave not\b": "haven't",
-            r"\bhad not\b": "hadn't",
-            r"\bmust not\b": "mustn't",
-            r"\bmight not\b": "mightn't",
-            r"\bneed not\b": "needn't",
-
-            # Pronoun + be contractions
-            r"\bI am\b": "I'm",
-            r"\byou are\b": "you're",
-            r"\bhe is\b": "he's",
-            r"\bshe is\b": "she's",
-            r"\bit is\b": "it's",
-            r"\bwe are\b": "we're",
-            r"\bthey are\b": "they're",
-            r"\bthat is\b": "that's",
-            r"\bwho is\b": "who's",
-            r"\bwhat is\b": "what's",
-            r"\bthere is\b": "there's",
-            r"\bhere is\b": "here's",
-            r"\bwhere is\b": "where's",
-            r"\bhow is\b": "how's",
-
-            # Pronoun + have contractions
-            r"\bI have\b": "I've",
-            r"\byou have\b": "you've",
-            r"\bwe have\b": "we've",
-            r"\bthey have\b": "they've",
-            r"\bwho have\b": "who've",
-
-            # Pronoun + will contractions
-            r"\bI will\b": "I'll",
-            r"\byou will\b": "you'll",
-            r"\bhe will\b": "he'll",
-            r"\bshe will\b": "she'll",
-            r"\bit will\b": "it'll",
-            r"\bwe will\b": "we'll",
-            r"\bthey will\b": "they'll",
-            r"\bthat will\b": "that'll",
-            r"\bwho will\b": "who'll",
-
-            # Pronoun + would contractions
-            r"\bI would\b": "I'd",
-            r"\byou would\b": "you'd",
-            r"\bhe would\b": "he'd",
-            r"\bshe would\b": "she'd",
-            r"\bit would\b": "it'd",
-            r"\bwe would\b": "we'd",
-            r"\bthey would\b": "they'd",
-            r"\bwho would\b": "who'd",
-
-            # Pronoun + had contractions (same forms as would)
-            r"\bI had\b": "I'd",
-            r"\byou had\b": "you'd",
-            r"\bhe had\b": "he'd",
-            r"\bshe had\b": "she'd",
-            r"\bwe had\b": "we'd",
-            r"\bthey had\b": "they'd",
-
-            # Let us
-            r"\blet us\b": "let's",
-        }
-
-        # Apply contractions (sorted by length to avoid partial replacements)
-        sorted_patterns = sorted(standard_contractions.items(), key=lambda x: len(x[0]), reverse=True)
-
-        for pattern, contraction in sorted_patterns:
-            def replacement_func(match):
-                matched_text = match.group(0)
-                # Preserve capitalization
-                if matched_text.isupper():
-                    return contraction.upper()
-                elif matched_text[0].isupper():
-                    return contraction[0].upper() + contraction[1:]
-                return contraction
-
-            text = re.sub(pattern, replacement_func, text, flags=re.IGNORECASE)
-
-        return text
-
-    def clean_text_for_speech(self, text: str) -> str:
-        """Clean text for natural speech"""
-        # PROTECT SSML markers before cleaning - these contain prosody for inflection
-        ssml_placeholder = "___SSML_PROTECTED___"
-        ssml_match = re.search(r'\[\[SSML:(.*?)\]\]', text)
-        ssml_content = None
-        if ssml_match:
-            ssml_content = ssml_match.group(0)  # Save full marker including brackets
-            text = text.replace(ssml_content, ssml_placeholder)
-
-        # CRITICAL FIX: Contract expanded forms for natural speech
-        # This handles cases where Claude generates formal text like "I am" instead of "I'm"
-        text = self._restore_contractions_daemon(text)
-
-        # Remove emojis - comprehensive Unicode range coverage
-        # This covers most common emoji ranges including:
-        # - Emoticons (1F600-1F64F)
-        # - Miscellaneous Symbols and Pictographs (1F300-1F5FF)
-        # - Transport and Map Symbols (1F680-1F6FF)
-        # - Regional Indicator Symbols (1F1E0-1F1FF)
-        # - Supplemental Symbols and Pictographs (1F900-1F9FF)
-        # - Additional emoticons (1FA70-1FAFF)
-        # - Basic Latin symbols that are often used as emoji (2600-27BF)
-        emoji_pattern = re.compile(
-            "["
-            "\U0001F600-\U0001F64F"  # emoticons
-            "\U0001F300-\U0001F5FF"  # symbols & pictographs
-            "\U0001F680-\U0001F6FF"  # transport & map symbols
-            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            "\U0001F900-\U0001F9FF"  # supplemental symbols & pictographs
-            "\U0001FA70-\U0001FAFF"  # symbols and pictographs extended-A
-            "\U00002600-\U000027BF"  # miscellaneous symbols & dingbats
-            "\U0001F700-\U0001F77F"  # alchemical symbols
-            "\U0001F780-\U0001F7FF"  # geometric shapes extended
-            "\U0001F800-\U0001F8FF"  # supplemental arrows-C
-            "\U00002300-\U000023FF"  # miscellaneous technical
-            "\U00002B50-\U00002B55"  # stars
-            "\U000025A0-\U000025FF"  # geometric shapes
-            "\U00002700-\U000027BF"  # dingbats
-            "\U0000FE0F"             # variation selector
-            "\U00003030"             # wavy dash
-            "\U000000A9"             # copyright
-            "\U000000AE"             # registered
-            "\U00002122"             # trademark
-            "]+",
-            flags=re.UNICODE
-        )
-        text = emoji_pattern.sub('', text)
-
-        # Remove code blocks and technical markers
-        text = re.sub(r'```[\s\S]*?```', '', text)
-        text = re.sub(r'<[^>]+>', '', text)
-        text = re.sub(r'\{[^}]+\}', '', text)
-
-        # Clean markdown
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-        text = re.sub(r'\*([^*]+)\*', r'\1', text)
-        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
-
-        # Normalize whitespace (this will also clean up spaces left by emoji removal)
-        text = ' '.join(text.split())
-
-        # Limit length
-        if len(text) > 500:
-            text = text[:500] + "..."
-
-        # RESTORE SSML markers after cleaning
-        if ssml_content and ssml_placeholder in text:
-            text = text.replace(ssml_placeholder, ssml_content)
-
-        return text.strip()
-
     def stop_playback(self, force: bool = False) -> bool:
         """
         Stop current TTS playback immediately using event-based signaling
